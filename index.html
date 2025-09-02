@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wheel Engine - Studio v2.3 (Rewind & Fix)</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <audio id="tick-sound" src="https://freesound.org/data/previews/107/107133_122437-lq.mp3" preload="auto"></audio>
+    <audio id="result-sound" src="https://freesound.org/data/previews/387/387232_1474294-lq.mp3" preload="auto"></audio>
+
+    <div class="app-container">
+        <!-- Thanh điều hướng chính ở trên cùng -->
+        <header class="app-header">
+            <h1>Wheel Engine</h1>
+            <nav class="main-nav">
+                <button class="nav-link active" data-page="wheel-studio">Studio Vòng Quay</button>
+                <button class="nav-link" data-page="logic-brain">Bộ Não Logic</button>
+            </nav>
+            <div class="header-actions">
+                <button id="import-btn" class="btn btn-secondary">Import</button>
+                <button id="export-btn" class="btn btn-secondary">Export</button>
+                <input type="file" id="import-file-input" accept=".json" style="display: none;">
+            </div>
+        </header>
+
+        <main class="app-main">
+            <!-- PAGE 1: WHEEL STUDIO -->
+            <div id="wheel-studio-page" class="app-page active">
+                <div class="creator-panel">
+                    <div id="panel-overlay"></div>
+                    <div class="panel-content-wrapper">
+                         <div class="panel-section">
+                            <h2>Quản Lý Vòng Quay</h2>
+                            <div class="form-group"><label for="wheel-selector">Chọn Vòng Quay</label><div style="display: flex; gap: 10px;"><select id="wheel-selector" style="flex-grow: 1;"></select><button id="delete-wheel-btn" class="btn btn-danger" title="Xóa vòng quay">Xóa</button></div></div>
+                            <hr><div class="form-group"><label for="new-wheel-name">Tên Vòng Quay Mới</label><input type="text" id="new-wheel-name" placeholder="VD: Vũ Khí, Kỹ Năng..."></div>
+                            <button id="create-wheel-btn" class="btn btn-primary">Tạo Mới</button>
+                        </div>
+                        <div class="panel-section" id="wheel-settings-panel">
+                             <h3 id="wheel-settings-title">Cài Đặt Vòng Quay</h3>
+                            <div class="form-group"><label for="spin-count-variable">Biến Số Lần Quay</label><input type="text" id="spin-count-variable" list="variable-suggestions-settings" placeholder="VD: so_lan_quay"></div>
+                            <div class="form-group checkbox-group"><input type="checkbox" id="remove-after-spin" class="custom-checkbox"><label for="remove-after-spin">Xóa ô sau khi quay trúng</label></div>
+                            <div class="form-group"><label for="default-link">Liên kết mặc định</label><select id="default-link"></select></div>
+                        </div>
+                        <div class="panel-section">
+                            <h3 id="segment-editor-title">Chỉnh Sửa Ô</h3>
+                             <div class="form-group"><label for="segment-text">Nội dung ô</label><input type="text" id="segment-text" placeholder="VD: Human, Elf, 10..."></div>
+                            <div class="form-row">
+                                <div class="form-group" style="flex-grow: 1;"><label for="segment-weight">Tỷ lệ (Trọng số)</label><input type="number" id="segment-weight" value="10" min="1"></div>
+                                <div class="form-group"><label for="segment-color">Màu sắc</label><input type="color" id="segment-color" value="#8AC926"></div>
+                            </div>
+                            <div id="segment-action-panel">
+                                <h4>Hành Động Kích Hoạt</h4>
+                                 <div class="action-group">
+                                    <div class="action-header"><input type="checkbox" id="action-setVariable-enabled" class="custom-checkbox"><label for="action-setVariable-enabled">Gán Giá Trị cho Biến</label></div>
+                                    <div class="action-details" id="action-setVariable-details"><div id="set-variable-actions-container"></div><button id="add-set-variable-action-btn" class="btn btn-secondary btn-add-action">+ Thêm hành động</button></div>
+                                </div>
+                                <div class="action-group">
+                                    <div class="action-header"><input type="checkbox" id="action-goToWheel-enabled" class="custom-checkbox"><label for="action-goToWheel-enabled">Chuyển đến Vòng Quay</label></div>
+                                    <div class="action-details" id="action-goToWheel-details"><select id="action-target-wheel"></select></div>
+                                </div>
+                                <div class="action-group">
+                                    <div class="action-header"><input type="checkbox" id="action-conditional-enabled" class="custom-checkbox"><label for="action-conditional-enabled">Điều Kiện Quay Lại (Bảo Hiểm)</label></div>
+                                    <div class="action-details" id="action-conditional-details">
+                                       <p class="condition-text">Nếu kết quả vòng quay sau là:</p>
+                                       <div class="condition-row"><select id="condition-operator"><option value="<=">&lt;=</option><option value=">=">&gt;=</option><option value="==">==</option><option value="<">&lt;</option><option value=">">&gt;</option></select><input type="number" id="condition-value" value="3"></div>
+                                       <p class="condition-text">thì được quay lại tối đa:</p>
+                                       <div class="condition-row"><input type="number" id="condition-rerolls" value="1" min="1"><span>lần.</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="btn-container"><button id="copy-actions-btn" class="btn btn-secondary" title="Sao chép">Copy</button><button id="paste-actions-btn" class="btn btn-secondary" title="Dán" disabled>Paste</button></div>
+                            <div class="btn-container"><button id="main-action-btn" class="btn btn-primary">Thêm Ô</button><button id="cancel-edit-btn" class="btn btn-secondary" style="display: none;">Hủy</button></div>
+                            <h4 style="margin-top: 1.5rem;">Các ô hiện tại</h4>
+                            <p id="total-weight-info"></p>
+                            <ul id="segment-list"></ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="viewer-panel">
+                    <h1 id="wheel-title"></h1>
+                    <h3 id="spin-count-display"></h3>
+                    <div class="wheel-container"><div class="wheel-marker"></div><canvas id="wheel-canvas" width="500" height="500"></canvas></div>
+                    <button id="spin-button" class="btn btn-primary">QUAY!</button>
+                </div>
+            </div>
+
+            <!-- PAGE 2: LOGIC BRAIN -->
+            <div id="logic-brain-page" class="app-page">
+                <div class="logic-sidebar">
+                    <div class="panel-section">
+                        <h2>Biến Số</h2>
+                        <div id="variables-list"></div>
+                        <hr>
+                        <div class="form-row">
+                            <input type="text" id="new-variable-name" placeholder="Tên biến mới...">
+                            <button id="add-variable-btn" class="btn btn-primary">Thêm</button>
+                        </div>
+                    </div>
+                    <div class="panel-section">
+                        <h2>Biến Tính Toán</h2>
+                        <ul id="computed-variables-list"></ul>
+                        <hr>
+                        <button id="add-computed-variable-btn" class="btn btn-primary">Thêm Biến Tính Toán</button>
+                    </div>
+                    <div class="panel-section">
+                        <h2>Luật Điều Kiện</h2>
+                        <ul id="rules-list"></ul>
+                        <hr>
+                        <button id="add-rule-btn" class="btn btn-primary">Thêm Luật Mới</button>
+                    </div>
+                </div>
+                <div id="logic-editor" class="panel-section">
+                    <!-- Editor cho Biến Tính Toán -->
+                    <div id="computed-variable-editor-content" style="display: none;">
+                        <h2 id="computed-variable-editor-title">Chỉnh Sửa Biến Tính Toán</h2>
+                        <div class="form-group">
+                            <label>Biến mục tiêu</label>
+                            <input type="text" id="computed-variable-target" list="variable-suggestions-action" placeholder="Chọn hoặc gõ tên biến...">
+                        </div>
+                        <div class="form-group">
+                            <label>Công thức</label>
+                            <input type="text" id="computed-variable-formula" placeholder="VD: suc_manh_base + nhanh_nhen_base">
+                             <p class="form-hint">Giá trị của biến mục tiêu sẽ LUÔN BẰNG công thức này.</p>
+                        </div>
+                    </div>
+                    <!-- Editor cho Luật Điều Kiện -->
+                    <div id="rule-editor-content" style="display: none;">
+                        <h2 id="rule-editor-title">Chỉnh Sửa Luật</h2>
+                        <div class="form-group"><label for="rule-name-input">Tên Luật</label><input type="text" id="rule-name-input" placeholder="VD: Tăng Chí Mạng Khi Máu Thấp"></div>
+                        <div class="rule-block"><h3 class="rule-block-title">NẾU (Tất cả điều kiện đúng)</h3><div id="rule-conditions-container"></div><button id="add-rule-condition-btn" class="btn btn-secondary btn-add-action">+ Thêm điều kiện</button></div>
+                        <div class="rule-block"><h3 class="rule-block-title">THÌ (Thực hiện hành động)</h3><div id="rule-actions-container"></div><button id="add-rule-action-btn" class="btn btn-secondary btn-add-action">+ Thêm hành động</button></div>
+                    </div>
+                    <p id="logic-editor-placeholder">Chọn một mục từ cột trái để chỉnh sửa.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="notification-toast"></div>
+    <div id="result-modal"><div class="modal-content"><h2>Kết quả</h2><p id="result-text"></p><button id="close-modal-button" class="btn btn-primary">OK</button></div></div>
+    <div id="confirmation-modal"></div>
+    <datalist id="variable-suggestions-settings"></datalist>
+    <datalist id="variable-suggestions-action"></datalist>
+    <script src="script.js"></script>
+</body>
+</html>
+
