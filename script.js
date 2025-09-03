@@ -49,9 +49,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const pasteWheelBtn = document.getElementById('paste-wheel-btn');
 
     // Collection System DOM Elements
-    const sidebarTitle = document.getElementById('sidebar-title');
-    const sidebarNav = document.getElementById('sidebar-nav');
-    const sidebarTabContent = document.getElementById('sidebar-tab-content');
     const actionSetCollectionSlotsEnabled = document.getElementById('action-setCollectionSlots-enabled');
     const actionSetCollectionSlotsTarget = document.getElementById('action-setCollectionSlots-target');
     const actionSetCollectionSlotsValue = document.getElementById('action-setCollectionSlots-value');
@@ -60,6 +57,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // Sidebar DOM Elements
+    const sidebarTitle = document.getElementById('sidebar-title');
+    const sidebarNav = document.getElementById('sidebar-nav');
+    const sidebarTabContent = document.getElementById('sidebar-tab-content');
     const activeEntitySelector = document.getElementById('active-entity-selector');
     const entityStatsDisplay = document.getElementById('entity-stats-display');
     const gameLog = document.getElementById('game-log');
@@ -150,18 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
         variableTemplate = stateObject.variableTemplate || {};
         collectionTemplate = stateObject.collectionTemplate || {};
         entities = stateObject.entities || {};
-        
+
         // Backward compatibility & data integrity
-        Object.values(entities).forEach(entity => { 
-            if (entity.equipmentSlots) { // Migrate old equipmentSlots
-                if (!entity.collections) entity.collections = {};
-                entity.collections['Trang_Bi'] = entity.equipmentSlots;
-                delete entity.equipmentSlots;
-                if (!collectionTemplate['Trang_Bi']) {
-                    collectionTemplate['Trang_Bi'] = { name: "Trang Bị", id: "Trang_Bi" };
-                }
-            }
-             if (!entity.collections) entity.collections = {}; 
+        Object.values(entities).forEach(entity => {
+            if (!entity.collections) entity.collections = {};
              // Ensure all template collections exist on the entity
              Object.keys(collectionTemplate).forEach(collectionId => {
                 if(!entity.collections[collectionId]) {
@@ -169,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
              });
         });
-        
+
         activeEntityId = Object.keys(entities)[0] || null;
 
         wheelsData = stateObject.wheelsData || {};
@@ -398,7 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         updateCollectionSelectorDropdowns();
     }
-    
+
     function updateCollectionSelectorDropdowns() {
         const optionsHTML = Object.values(collectionTemplate)
             .sort((a, b) => a.name.localeCompare(b.name))
@@ -475,23 +467,34 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSidebarTabs();
         updateEntityStatDisplay();
     }
-    
+
     function updateSidebarTitle() {
         const activeEntity = getActiveEntity();
         sidebarTitle.textContent = activeEntity ? activeEntity.name : 'Thông Tin';
     }
 
     function updateSidebarTabs() {
+        const previouslyActiveTabId = sidebarNav.querySelector('.sidebar-tab-btn.active')?.dataset.tab;
+
         // Clear previous dynamic tabs and content
         sidebarNav.querySelectorAll('.dynamic-tab').forEach(el => el.remove());
         sidebarTabContent.querySelectorAll('.dynamic-tab-content').forEach(el => el.remove());
 
         const activeEntity = getActiveEntity();
-        if (!activeEntity) return;
+        if (!activeEntity) {
+             // Deactivate all first
+            sidebarNav.querySelectorAll('.sidebar-tab-btn').forEach(btn => btn.classList.remove('active'));
+            sidebarTabContent.querySelectorAll('.sidebar-tab').forEach(tab => tab.classList.remove('active'));
 
-        const previouslyActiveTab = sidebarNav.querySelector('.sidebar-tab-btn.active');
+            // Reactivate stats tab
+             const statsBtn = sidebarNav.querySelector('.sidebar-tab-btn[data-tab="stats-tab"]');
+            if (statsBtn) statsBtn.classList.add('active');
+            const statsContent = document.getElementById('stats-tab');
+            if (statsContent) statsContent.classList.add('active');
+            return;
+        }
 
-        Object.keys(activeEntity.collections || {}).sort().forEach(collectionId => {
+        Object.keys(activeEntity.collections || {}).sort((a,b) => collectionTemplate[a]?.name.localeCompare(collectionTemplate[b]?.name)).forEach(collectionId => {
             const collectionTpl = collectionTemplate[collectionId];
             if (!collectionTpl) return; // Skip if template doesn't exist
 
@@ -506,10 +509,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const tabContent = document.createElement('div');
             tabContent.id = `collection-${collectionId}-tab`;
             tabContent.className = 'sidebar-tab dynamic-tab-content collection-tab-content';
-            
+
             const collectionDisplay = document.createElement('div');
             collectionDisplay.className = 'entity-collection-display';
-            
+
             const slots = activeEntity.collections[collectionId];
             if (!slots || slots.length === 0) {
                  collectionDisplay.innerHTML = '<p class="form-hint">Không có ô nào.</p>';
@@ -527,22 +530,15 @@ document.addEventListener('DOMContentLoaded', () => {
             sidebarTabContent.appendChild(tabContent);
         });
 
-        // Ensure a tab remains active, defaulting to stats tab if the active one was removed
-        const currentActiveTab = sidebarNav.querySelector('.sidebar-tab-btn.active');
-        if (!currentActiveTab || !document.body.contains(currentActiveTab)) {
-             // Deactivate all first
+        // Restore active tab, defaulting to stats tab
+        const tabToActivate = sidebarNav.querySelector(`.sidebar-tab-btn[data-tab="${previouslyActiveTabId}"]`) || sidebarNav.querySelector('.sidebar-tab-btn[data-tab="stats-tab"]');
+        if (tabToActivate) {
             sidebarNav.querySelectorAll('.sidebar-tab-btn').forEach(btn => btn.classList.remove('active'));
             sidebarTabContent.querySelectorAll('.sidebar-tab').forEach(tab => tab.classList.remove('active'));
 
-            // Activate stats tab by default
-            const statsBtn = sidebarNav.querySelector('.sidebar-tab-btn[data-tab="stats-tab"]');
-            if (statsBtn) {
-                statsBtn.classList.add('active');
-                const statsContent = document.getElementById('stats-tab');
-                if (statsContent) {
-                    statsContent.classList.add('active');
-                }
-            }
+            tabToActivate.classList.add('active');
+            const contentToActivate = document.getElementById(tabToActivate.dataset.tab);
+            if(contentToActivate) contentToActivate.classList.add('active');
         }
     }
 
@@ -674,7 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const conditionalAction = actions.find(a => a.type === 'conditionalReroll');
         actionConditionalEnabled.checked = !!conditionalAction;
         if (conditionalAction) { conditionOperatorSelect.value = conditionalAction.operator; conditionValueInput.value = conditionalAction.value; conditionRerollsInput.value = conditionalAction.maxRerolls || 1; }
-        
+
         const setSlotsAction = actions.find(a => a.type === 'setCollectionSlots');
         actionSetCollectionSlotsEnabled.checked = !!setSlotsAction;
         if(setSlotsAction) {
@@ -712,19 +708,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const actions = editingSegmentData.actions || [];
         const setVarActions = actions.filter(a => a.type === 'setVariable');
         document.querySelector('#action-setVariable-enabled ~ .action-summary').textContent = setVarActions.length > 0 ? setVarActions.map(a => `${a.target}.${a.targetProperty || 'bonus'} ${a.operator} ${a.value}`).join(', ') : '';
-       
+
         const setSlotsAction = actions.find(a => a.type === 'setCollectionSlots');
         document.querySelector('#action-setCollectionSlots-enabled ~ .action-summary').textContent = setSlotsAction ? `[${collectionTemplate[setSlotsAction.targetCollection]?.name || '?'}] = ${setSlotsAction.value} ô` : '';
-        
+
         const addToCollectionAction = actions.find(a => a.type === 'addToCollection');
         document.querySelector('#action-addToCollection-enabled ~ .action-summary').textContent = addToCollectionAction ? `Thêm vào [${collectionTemplate[addToCollectionAction.targetCollection]?.name || '?'}]` : '';
 
         const goToWheelAction = actions.find(a => a.type === 'goToWheel');
         document.querySelector('#action-goToWheel-enabled ~ .action-summary').textContent = (goToWheelAction && goToWheelAction.target) ? `-> ${goToWheelAction.target}` : '';
-        
+
         const playSoundAction = actions.find(a => a.type === 'playSound');
         document.querySelector('#action-playSound-enabled ~ .action-summary').textContent = (playSoundAction && playSoundAction.soundData) ? `Phát âm thanh tùy chỉnh` : '';
-        
+
         const conditionalAction = actions.find(a => a.type === 'conditionalReroll');
         document.querySelector('#action-conditional-enabled ~ .action-summary').textContent = conditionalAction ? `Nếu KQ ${conditionalAction.operator} ${conditionalAction.value}, quay lại ${conditionalAction.maxRerolls} lần` : '';
     }
@@ -907,19 +903,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // Entity Manager Handlers
-    addEntityBtn.addEventListener('click', () => { 
-        const name = newEntityNameInput.value.trim(); 
-        if (!name) return; 
+    addEntityBtn.addEventListener('click', () => {
+        const name = newEntityNameInput.value.trim();
+        if (!name) return;
         const id = `entity_${Date.now()}`;
         const newCollections = {};
         Object.keys(collectionTemplate).forEach(collId => { newCollections[collId] = []; });
-        entities[id] = { id, name, variables: JSON.parse(JSON.stringify(variableTemplate)), avatar: '', collections: newCollections }; 
-        newEntityNameInput.value = ''; 
-        if (!activeEntityId) activeEntityId = id; 
-        updateEntityListUI(); 
-        updateActiveEntitySelector(); 
-        loadEntityEditor(id); 
-        throttledSaveState(); 
+        entities[id] = { id, name, variables: JSON.parse(JSON.stringify(variableTemplate)), avatar: '', collections: newCollections };
+        newEntityNameInput.value = '';
+        if (!activeEntityId) activeEntityId = id;
+        updateEntityListUI();
+        updateActiveEntitySelector();
+        loadEntityEditor(id);
+        throttledSaveState();
     });
     entityListUI.addEventListener('click', e => { const targetLi = e.target.closest('.list-item'); if (!targetLi) return; const id = targetLi.dataset.id; if (e.target.matches('.delete-entity-btn')) { e.stopPropagation(); showConfirmationModal(`Bạn có chắc muốn xóa thực thể "${entities[id].name}"?`, () => { delete entities[id]; if (editingEntityId === id) editingEntityId = null; if (activeEntityId === id) activeEntityId = null; updateAllUI(); throttledSaveState(); }); } else { loadEntityEditor(id); } });
     entityNameInput.addEventListener('input', (e) => { if(editingEntityId) { entities[editingEntityId].name = e.target.value; entityEditorTitle.textContent = `Chỉnh sửa: ${e.target.value}`; updateEntityListUI(); updateActiveEntitySelector(); updateSidebarTitle(); throttledSaveState(); } });
@@ -967,7 +963,26 @@ document.addEventListener('DOMContentLoaded', () => {
     createWheelBtn.addEventListener('click', () => { const name = newWheelNameInput.value.trim().replace(/\s+/g, '_'); if (name && !wheelsData[name]) { wheelsData[name] = { segments: [], settings: { removalMode: 'none', spinCountVariable: '', defaultLink: 'None' } }; newWheelNameInput.value = ''; loadWheel(name); throttledSaveState(); } else if (wheelsData[name]) alert('Lỗi: Tên vòng quay đã tồn tại!'); });
     wheelSelector.addEventListener('change', () => { if (!isSpinning) loadWheel(wheelSelector.value); });
     deleteWheelBtn.addEventListener('click', () => { if (!currentWheelName) return; showConfirmationModal(`Bạn có chắc muốn xóa vòng quay "${currentWheelName}"?`, () => { delete wheelsData[currentWheelName]; loadWheel(Object.keys(wheelsData)[0] || null); throttledSaveState(); }); });
-    mainActionBtn.addEventListener('click', () => { if (!currentWheelName) return; if (editingSegmentIndex !== null) { wheelsData[currentWheelName].segments[editingSegmentIndex] = editingSegmentData; } else { editingSegmentData.text = segmentTextInput.value; editingSegmentData.weight = parseInt(segmentWeightInput.value) || 1; editingSegmentData.color = segmentColorInput.value; wheelsData[currentWheelName].segments.push(editingSegmentData); } exitEditMode(); throttledSaveState(); });
+
+    mainActionBtn.addEventListener('click', () => {
+        if (!currentWheelName) return;
+
+        // BUG FIX v6.3: Sync basic segment data from inputs before every save action.
+        editingSegmentData.text = segmentTextInput.value.trim();
+        editingSegmentData.weight = parseInt(segmentWeightInput.value) || 1;
+        editingSegmentData.color = segmentColorInput.value;
+
+        if (editingSegmentIndex !== null) {
+            // This is "Update" mode
+            wheelsData[currentWheelName].segments[editingSegmentIndex] = editingSegmentData;
+        } else {
+            // This is "Add" mode
+            wheelsData[currentWheelName].segments.push(editingSegmentData);
+        }
+        exitEditMode();
+        throttledSaveState();
+    });
+
     cancelEditBtn.addEventListener('click', exitEditMode);
     copyActionsBtn.addEventListener('click', () => { if (editingSegmentIndex !== null) { copiedActions = JSON.parse(JSON.stringify(editingSegmentData.actions || [])); pasteActionsBtn.disabled = false; showNotification("Đã sao chép hành động của ô!"); } });
     pasteActionsBtn.addEventListener('click', () => { if (editingSegmentIndex !== null && copiedActions) { editingSegmentData.actions = JSON.parse(JSON.stringify(copiedActions)); populateActionPanelFromEditingState(); updateAllActionSummaries(); showNotification("Đã dán hành động!"); } });
@@ -1069,7 +1084,7 @@ document.addEventListener('DOMContentLoaded', () => {
         computedVariables = []; conditionalRules = [];
         updateAllUI();
         evaluateAllRules();
-        addLogMessage("Chào mừng đến với Wheel Engine v6.1!");
+        addLogMessage("Chào mừng đến với Wheel Engine v6.3!");
     }
 
     initialize();
