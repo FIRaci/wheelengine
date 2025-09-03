@@ -44,12 +44,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const spinCountDisplay = document.getElementById('spin-count-display');
     const resetSpinBtn = document.getElementById('reset-spin-btn');
     const segmentActionPanel = document.getElementById('segment-action-panel');
-    const activeEntitySelector = document.getElementById('active-entity-selector');
-    const entityStatsDisplay = document.getElementById('entity-stats-display');
-    const gameLog = document.getElementById('game-log');
     const logicMapContainer = document.getElementById('logic-map-container');
     const copyWheelBtn = document.getElementById('copy-wheel-btn');
     const pasteWheelBtn = document.getElementById('paste-wheel-btn');
+
+    // Collection System DOM Elements
+    const sidebarTitle = document.getElementById('sidebar-title');
+    const sidebarNav = document.getElementById('sidebar-nav');
+    const sidebarTabContent = document.getElementById('sidebar-tab-content');
+    const actionSetCollectionSlotsEnabled = document.getElementById('action-setCollectionSlots-enabled');
+    const actionSetCollectionSlotsTarget = document.getElementById('action-setCollectionSlots-target');
+    const actionSetCollectionSlotsValue = document.getElementById('action-setCollectionSlots-value');
+    const actionAddToCollectionEnabled = document.getElementById('action-addToCollection-enabled');
+    const actionAddToCollectionTarget = document.getElementById('action-addToCollection-target');
+
+
+    // Sidebar DOM Elements
+    const activeEntitySelector = document.getElementById('active-entity-selector');
+    const entityStatsDisplay = document.getElementById('entity-stats-display');
+    const gameLog = document.getElementById('game-log');
+
 
     // Multimedia Elements
     const tickSoundUpload = document.getElementById('tick-sound-upload');
@@ -70,6 +84,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const newVariableValueInput = document.getElementById('new-variable-value');
     const newVariableIconUpload = document.getElementById('new-variable-icon-upload');
     const addVariableBtn = document.getElementById('add-variable-btn');
+    const collectionTemplateListUI = document.getElementById('collection-template-list');
+    const newCollectionNameInput = document.getElementById('new-collection-name');
+    const addCollectionBtn = document.getElementById('add-collection-btn');
     const logicEditor = document.getElementById('logic-editor');
     const logicEditorPlaceholder = document.getElementById('logic-editor-placeholder');
     const computedVariablesListUI = document.getElementById('computed-variables-list');
@@ -95,14 +112,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const entityEditorTitle = document.getElementById('entity-editor-title');
     const entityNameInput = document.getElementById('entity-name-input');
     const entityVariablesListDiv = document.getElementById('entity-variables-list');
+    const entityCollectionsListDiv = document.getElementById('entity-collections-list');
     const entityEditorPlaceholder = document.getElementById('entity-editor-placeholder');
-    const importEntitiesBtn = document.getElementById('import-entities-btn'); 
-    const exportEntitiesBtn = document.getElementById('export-entities-btn'); 
-    const importEntitiesInput = document.getElementById('import-entities-input'); 
+    const importEntitiesBtn = document.getElementById('import-entities-btn');
+    const exportEntitiesBtn = document.getElementById('export-entities-btn');
+    const importEntitiesInput = document.getElementById('import-entities-input');
 
 
     // Global State
-    let wheelsData = {}, variableTemplate = {}, entities = {}, computedVariables = [], conditionalRules = [], projectSettings = {};
+    let wheelsData = {}, variableTemplate = {}, collectionTemplate = {}, entities = {}, computedVariables = [], conditionalRules = [], projectSettings = {};
     let activeEntityId = null;
     let editingEntityId = null;
     let currentWheelName = '', editingSegmentIndex = null;
@@ -115,53 +133,74 @@ document.addEventListener('DOMContentLoaded', () => {
     let variableSnapshot = null;
     let editingSegmentData = {};
     const MAX_LOG_ENTRIES = 50;
-    
+
     // Sound Management
     let tickAudio = new Audio();
     tickAudio.loop = true;
 
     // --- DATA I/O FUNCTIONS ---
-    function getFullState() { return { wheelsData, variableTemplate, entities, computedVariables, conditionalRules, projectSettings }; }
+    function getFullState() { return { wheelsData, variableTemplate, collectionTemplate, entities, computedVariables, conditionalRules, projectSettings }; }
     function throttledSaveState() { clearTimeout(saveTimeout); saveTimeout = setTimeout(() => { try { localStorage.setItem('wheelEngineSaveData', JSON.stringify(getFullState())); showNotification("Đã tự động lưu!"); } catch (e) { console.error("Lỗi khi lưu dữ liệu:", e); showNotification("Lỗi: Không thể tự động lưu.", true); } }, 1000); }
-    
+
     function loadState(stateObject, fromFile = false) {
         if (!stateObject || typeof stateObject !== 'object') {
             showNotification("Lỗi: Dữ liệu không hợp lệ.", true); return;
         }
 
         variableTemplate = stateObject.variableTemplate || {};
+        collectionTemplate = stateObject.collectionTemplate || {};
         entities = stateObject.entities || {};
-        activeEntityId = Object.keys(entities)[0] || null;
         
+        // Backward compatibility & data integrity
+        Object.values(entities).forEach(entity => { 
+            if (entity.equipmentSlots) { // Migrate old equipmentSlots
+                if (!entity.collections) entity.collections = {};
+                entity.collections['Trang_Bi'] = entity.equipmentSlots;
+                delete entity.equipmentSlots;
+                if (!collectionTemplate['Trang_Bi']) {
+                    collectionTemplate['Trang_Bi'] = { name: "Trang Bị", id: "Trang_Bi" };
+                }
+            }
+             if (!entity.collections) entity.collections = {}; 
+             // Ensure all template collections exist on the entity
+             Object.keys(collectionTemplate).forEach(collectionId => {
+                if(!entity.collections[collectionId]) {
+                    entity.collections[collectionId] = [];
+                }
+             });
+        });
+        
+        activeEntityId = Object.keys(entities)[0] || null;
+
         wheelsData = stateObject.wheelsData || {};
         computedVariables = stateObject.computedVariables || [];
         conditionalRules = stateObject.conditionalRules || [];
         projectSettings = stateObject.projectSettings || {};
-        
+
         if(projectSettings.tickSoundData) {
             tickAudio.src = projectSettings.tickSoundData;
         }
-        
+
         activeEditor = { type: null, id: null };
         editingEntityId = null;
         loadWheel(Object.keys(wheelsData)[0] || null);
         updateAllUI();
         evaluateAllRules();
-        
+
         const message = fromFile ? "Đã import dự án thành công!" : "Đã tải lại phiên làm việc trước!";
         showNotification(message);
     }
 
     function handleExport() { const state = getFullState(); const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state)); const downloadAnchorNode = document.createElement('a'); downloadAnchorNode.setAttribute("href", dataStr); downloadAnchorNode.setAttribute("download", `wheel-engine-project_${new Date().toISOString().slice(0,10)}.json`); document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove(); showNotification("Đã xuất file dự án!"); }
     function handleImport(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function(e) { try { const newState = JSON.parse(e.target.result); showConfirmationModal("Import sẽ ghi đè lên toàn bộ dự án hiện tại. Bạn có chắc chắn?", () => { loadState(newState, true); }); } catch (error) { showNotification("Lỗi: File JSON không hợp lệ.", true); } finally { importFileInput.value = ''; } }; reader.readAsText(file); }
-    
+
     function handleExportEntities() { if (Object.keys(entities).length === 0) { showNotification("Không có thực thể nào để export.", true); return; } const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(entities)); const downloadAnchorNode = document.createElement('a'); downloadAnchorNode.setAttribute("href", dataStr); downloadAnchorNode.setAttribute("download", `wheel-engine-entities_${new Date().toISOString().slice(0,10)}.json`); document.body.appendChild(downloadAnchorNode); downloadAnchorNode.click(); downloadAnchorNode.remove(); showNotification("Đã xuất file dữ liệu thực thể!"); }
-    function handleImportEntities(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function(e) { try { const newEntities = JSON.parse(e.target.result); if (typeof newEntities !== 'object' || newEntities === null || Array.isArray(newEntities)) { throw new Error("File không chứa dữ liệu thực thể hợp lệ."); } showConfirmationModal("Import sẽ ghi đè lên toàn bộ danh sách thực thể hiện tại. Bạn có chắc chắn?", () => { entities = newEntities; activeEntityId = Object.keys(entities)[0] || null; editingEntityId = null; updateAllUI(); throttledSaveState(); showNotification("Đã import danh sách thực thể thành công!"); }); } catch (error) { showNotification(`Lỗi: ${error.message}`, true); } finally { importEntitiesInput.value = ''; } }; reader.readAsText(file); }
-    
+    function handleImportEntities(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function(e) { try { const newEntities = JSON.parse(e.target.result); if (typeof newEntities !== 'object' || newEntities === null || Array.isArray(newEntities)) { throw new Error("File không chứa dữ liệu thực thể hợp lệ."); } showConfirmationModal("Import sẽ ghi đè lên toàn bộ danh sách thực thể hiện tại. Bạn có chắc chắn?", () => { entities = newEntities; activeEntityId = Object.keys(entities)[0] || null; editingEntityId = null; loadState(getFullState()); /* Reload to ensure data integrity */ showNotification("Đã import danh sách thực thể thành công!"); }); } catch (error) { showNotification(`Lỗi: ${error.message}`, true); } finally { importEntitiesInput.value = ''; } }; reader.readAsText(file); }
+
     // --- MEDIA HELPERS ---
     function handleFileUpload(file, callback) {
         if (!file) {
-            callback(''); // Return empty string if no file
+            callback('');
             return;
         };
         const reader = new FileReader();
@@ -183,18 +222,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- APP NAVIGATION ---
     navLinks.forEach(link => { link.addEventListener('click', () => { if (isSpinning) return; navLinks.forEach(l => l.classList.remove('active')); link.classList.add('active'); const pageId = link.dataset.page + '-page'; appPages.forEach(p => p.classList.remove('active')); document.getElementById(pageId)?.classList.add('active'); if (link.dataset.page === 'logic-brain') updateAllUI(); }); });
     logicSubNavLinks.forEach(link => { link.addEventListener('click', () => { logicSubNavLinks.forEach(l => l.classList.remove('active')); link.classList.add('active'); const subpageId = link.dataset.subpage + '-subpage'; logicSubPages.forEach(p => p.classList.remove('active')); document.getElementById(subpageId)?.classList.add('active'); if (link.dataset.subpage === 'logic-map') { renderLogicMap(); } }); });
+    sidebarNav.addEventListener('click', (e) => {
+        if (e.target.matches('.sidebar-tab-btn')) {
+            const tabId = e.target.dataset.tab;
+            sidebarNav.querySelectorAll('.sidebar-tab-btn').forEach(btn => btn.classList.remove('active'));
+            e.target.classList.add('active');
+            sidebarTabContent.querySelectorAll('.sidebar-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.id === tabId);
+            });
+        }
+    });
 
     // --- LOGIC MAP FUNCTION ---
     function renderLogicMap() { const nodes = []; const edges = []; Object.keys(wheelsData).forEach(wheelName => { nodes.push({ id: wheelName, label: wheelName, shape: 'box' }); const wheel = wheelsData[wheelName]; if (wheel.segments) { wheel.segments.forEach(segment => { if (segment.actions) { const goToWheelAction = segment.actions.find(a => a.type === 'goToWheel' && a.target); if (goToWheelAction) { edges.push({ from: wheelName, to: goToWheelAction.target, label: `Trúng ô: '${segment.text}'`, arrows: 'to' }); } } }); } if (wheel.settings && wheel.settings.defaultLink && wheel.settings.defaultLink !== 'None') { edges.push({ from: wheelName, to: wheel.settings.defaultLink, label: 'Liên kết mặc định', arrows: 'to', dashes: true }); } }); const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges), }; const options = { layout: { hierarchical: { direction: "UD", sortMethod: "directed", }, }, edges: { color: "#999", font: { color: '#efefef', size: 12, strokeWidth: 0 }, }, nodes: { color: { background: '#404040', border: '#ffde59', highlight: { background: '#ffde59', border: '#ffc107' } }, font: { color: '#f0f0f0', size: 14 } }, physics: false, }; new vis.Network(logicMapContainer, data, options); }
 
 
-    // --- CORE LOGIC (STATS OVERHAUL) ---
-    function getActiveVariables() { return (activeEntityId && entities[activeEntityId]) ? entities[activeEntityId].variables : {}; }
-    
+    // --- CORE LOGIC (STATS & ACTIONS) ---
+    function getActiveEntity() { return (activeEntityId && entities[activeEntityId]) ? entities[activeEntityId] : null; }
+    function getActiveVariables() { return getActiveEntity()?.variables || {}; }
+
     function evaluateFormula(formula, contextEntityId = activeEntityId) {
         if (typeof formula !== 'string') return formula;
-        const contextVars = (contextEntityId && entities[contextEntityId]) ? entities[contextEntityId].variables : {};
-        
+        const contextEntity = contextEntityId && entities[contextEntityId];
+        if (!contextEntity) return formula;
+        const contextVars = contextEntity.variables;
+
         let expression = formula.replace(/[a-zA-Z_][a-zA-Z0-9_]*/g, (match) => {
             const varData = contextVars[match];
             if (varData === undefined) return match;
@@ -211,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function evaluateAllRules(depth = 0) {
         if (!activeEntityId || depth > 15) return;
         let changedInLoop = false;
-        
+
         computedVariables.forEach(compVar => {
             const targetVarName = compVar.formula.replace(/_base|_bonus/g, '').split(/[+\-*/\s()]/).find(v => variableTemplate[v]);
             if (!targetVarName) return;
@@ -247,64 +299,70 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (!result) { allConditionsMet = false; break; }
             }
-            if (allConditionsMet) { 
+            if (allConditionsMet) {
                 addLogMessage(`Luật <span class="log-highlight">${rule.name}</span> được kích hoạt.`);
-                if (executeActions(rule.actions)) changedInLoop = true; 
+                if (executeActions(rule.actions)) changedInLoop = true;
             }
         });
         if (changedInLoop) {
             updateEntityEditorUI();
-            updateEntityStatDisplay();
+            updateSidebarDisplay();
             evaluateAllRules(depth + 1);
         }
     }
-    
+
     function executeActions(actions, resultContext = null) {
-        if (!activeEntityId) return false;
+        const activeEntity = getActiveEntity();
+        if (!activeEntity) return false;
         let variablesChanged = false;
-        const activeVars = getActiveVariables();
+        const activeVars = activeEntity.variables;
 
         (actions || []).forEach(action => {
-            if (action.type !== 'setVariable') return;
-            const varName = action.target;
-            const targetProp = action.targetProperty || 'bonus';
-            if (!varName || !activeVars[varName]) return;
-            
-            const oldValue = activeVars[varName][targetProp];
-            let rawValue = action.value;
-            if (resultContext && typeof rawValue === 'string' && rawValue.trim().toUpperCase() === '[RESULT]') {
-                rawValue = resultContext.text;
-            }
-            const value = evaluateFormula(rawValue);
-            let finalValue;
+            switch (action.type) {
+                case 'setVariable':
+                    const varName = action.target;
+                    const targetProp = action.targetProperty || 'bonus';
+                    if (!varName || !activeVars[varName]) return;
 
-            switch (action.operator) {
-                case '=': finalValue = value; break;
-                case '+=': finalValue = (oldValue || 0) + value; break;
-                case '-=': finalValue = (oldValue || 0) - value; break;
-            }
-            
-            if (typeof oldValue === 'string' && action.operator !== '=') return;
+                    const oldValue = activeVars[varName][targetProp];
+                    let rawValue = action.value;
+                    if (resultContext && typeof rawValue === 'string' && rawValue.trim().toUpperCase() === '[RESULT]') {
+                        rawValue = resultContext.text;
+                    }
+                    const value = evaluateFormula(rawValue);
+                    let finalValue;
 
-            if (finalValue !== oldValue) {
-                addLogMessage(`-> <span class="log-highlight">${varName}.${targetProp}</span>: ${oldValue} -> ${finalValue}`);
-                activeVars[varName][targetProp] = finalValue;
-                variablesChanged = true;
+                    switch (action.operator) {
+                        case '=': finalValue = value; break;
+                        case '+=': finalValue = (oldValue || 0) + value; break;
+                        case '-=': finalValue = (oldValue || 0) - value; break;
+                    }
+
+                    if (typeof oldValue === 'string' && action.operator !== '=') return;
+
+                    if (finalValue !== oldValue) {
+                        addLogMessage(`-> <span class="log-highlight">${varName}.${targetProp}</span>: ${oldValue} -> ${finalValue}`);
+                        activeVars[varName][targetProp] = finalValue;
+                        variablesChanged = true;
+                    }
+                    break;
             }
+
         });
         if (variablesChanged) { throttledSaveState(); }
         return variablesChanged;
     }
-    
+
     // --- UI UPDATE FUNCTIONS ---
     function updateAllUI() {
         updateVariableTemplateUI();
+        updateCollectionTemplateUI();
         updateComputedVariablesListUI();
         updateRulesListUI();
         updateEntityListUI();
         updateActiveEntitySelector();
         updateEntityEditorUI();
-        updateEntityStatDisplay();
+        updateSidebarDisplay();
         updateCreatorUI();
         clearTickSoundBtn.style.display = projectSettings.tickSoundData ? 'inline-block' : 'none';
     }
@@ -330,9 +388,30 @@ document.addEventListener('DOMContentLoaded', () => {
         updateVariableSuggestions();
     }
 
+    function updateCollectionTemplateUI() {
+        collectionTemplateListUI.innerHTML = '';
+        Object.values(collectionTemplate).sort((a, b) => a.name.localeCompare(b.name)).forEach(coll => {
+            const li = document.createElement('li');
+            li.className = 'list-item';
+            li.innerHTML = `<span class="item-info">${coll.name}</span><button class="delete-btn delete-collection-btn" data-id="${coll.id}">X</button>`;
+            collectionTemplateListUI.appendChild(li);
+        });
+        updateCollectionSelectorDropdowns();
+    }
+    
+    function updateCollectionSelectorDropdowns() {
+        const optionsHTML = Object.values(collectionTemplate)
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map(coll => `<option value="${coll.id}">${coll.name}</option>`)
+            .join('');
+        actionSetCollectionSlotsTarget.innerHTML = optionsHTML;
+        actionAddToCollectionTarget.innerHTML = optionsHTML;
+    }
+
+
     function updateEntityListUI() { entityListUI.innerHTML = ''; Object.values(entities).forEach(entity => { const li = document.createElement('li'); li.className = 'list-item'; li.dataset.id = entity.id; if (editingEntityId === entity.id) li.classList.add('editing'); li.innerHTML = `<span class="item-info">${entity.name}</span><button class="delete-btn delete-entity-btn" data-id="${entity.id}">X</button>`; entityListUI.appendChild(li); }); }
     function updateActiveEntitySelector() { activeEntitySelector.innerHTML = '<option value="none">-- Không có --</option>'; Object.values(entities).forEach(entity => { const option = document.createElement('option'); option.value = entity.id; option.textContent = entity.name; activeEntitySelector.appendChild(option); }); activeEntitySelector.value = activeEntityId && entities[activeEntityId] ? activeEntityId : 'none'; }
-    
+
     function updateEntityEditorUI() {
         const hasSelection = !!editingEntityId;
         entityEditorPlaceholder.style.display = hasSelection ? 'none' : 'block';
@@ -358,7 +437,115 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>`;
             entityVariablesListDiv.appendChild(item);
         });
+
+        // Populate collections
+        entityCollectionsListDiv.innerHTML = '';
+        Object.keys(collectionTemplate).sort((a,b) => collectionTemplate[a].name.localeCompare(collectionTemplate[b].name)).forEach(collectionId => {
+            const collectionTpl = collectionTemplate[collectionId];
+            const collectionGroup = document.createElement('div');
+            collectionGroup.className = 'collection-editor-group';
+
+            const title = document.createElement('h4');
+            title.textContent = collectionTpl.name;
+            collectionGroup.appendChild(title);
+
+            const slots = entity.collections[collectionId] || [];
+            if (slots.length === 0) {
+                const emptyText = document.createElement('p');
+                emptyText.className = 'form-hint';
+                emptyText.textContent = 'Trống';
+                collectionGroup.appendChild(emptyText);
+            } else {
+                slots.forEach((item, index) => {
+                    const slotDiv = document.createElement('div');
+                    slotDiv.className = 'collection-editor-slot';
+                    slotDiv.innerHTML = `
+                        <label>#${index + 1}</label>
+                        <input type="text" value="${item || ''}" data-entityid="${entity.id}" data-collectionid="${collectionId}" data-slotindex="${index}">
+                    `;
+                    collectionGroup.appendChild(slotDiv);
+                });
+            }
+            entityCollectionsListDiv.appendChild(collectionGroup);
+        });
     }
+
+    function updateSidebarDisplay() {
+        updateSidebarTitle();
+        updateSidebarTabs();
+        updateEntityStatDisplay();
+    }
+    
+    function updateSidebarTitle() {
+        const activeEntity = getActiveEntity();
+        sidebarTitle.textContent = activeEntity ? activeEntity.name : 'Thông Tin';
+    }
+
+    function updateSidebarTabs() {
+        // Clear previous dynamic tabs and content
+        sidebarNav.querySelectorAll('.dynamic-tab').forEach(el => el.remove());
+        sidebarTabContent.querySelectorAll('.dynamic-tab-content').forEach(el => el.remove());
+
+        const activeEntity = getActiveEntity();
+        if (!activeEntity) return;
+
+        const previouslyActiveTab = sidebarNav.querySelector('.sidebar-tab-btn.active');
+
+        Object.keys(activeEntity.collections || {}).sort().forEach(collectionId => {
+            const collectionTpl = collectionTemplate[collectionId];
+            if (!collectionTpl) return; // Skip if template doesn't exist
+
+            // Create Tab Button
+            const tabBtn = document.createElement('button');
+            tabBtn.className = 'sidebar-tab-btn dynamic-tab';
+            tabBtn.dataset.tab = `collection-${collectionId}-tab`;
+            tabBtn.textContent = collectionTpl.name;
+            sidebarNav.appendChild(tabBtn);
+
+            // Create Tab Content Pane
+            const tabContent = document.createElement('div');
+            tabContent.id = `collection-${collectionId}-tab`;
+            tabContent.className = 'sidebar-tab dynamic-tab-content collection-tab-content';
+            
+            const collectionDisplay = document.createElement('div');
+            collectionDisplay.className = 'entity-collection-display';
+            
+            const slots = activeEntity.collections[collectionId];
+            if (!slots || slots.length === 0) {
+                 collectionDisplay.innerHTML = '<p class="form-hint">Không có ô nào.</p>';
+            } else {
+                slots.forEach((item, index) => {
+                    const slotDiv = document.createElement('div');
+                    slotDiv.className = 'collection-slot';
+                    const itemClass = item ? 'slot-item' : 'slot-item empty';
+                    const itemText = item || 'Trống';
+                    slotDiv.innerHTML = `<span class="slot-index">#${index + 1}</span><span class="${itemClass}">${itemText}</span>`;
+                    collectionDisplay.appendChild(slotDiv);
+                });
+            }
+            tabContent.appendChild(collectionDisplay);
+            sidebarTabContent.appendChild(tabContent);
+        });
+
+        // Ensure a tab remains active, defaulting to stats tab if the active one was removed
+        const currentActiveTab = sidebarNav.querySelector('.sidebar-tab-btn.active');
+        if (!currentActiveTab || !document.body.contains(currentActiveTab)) {
+             // Deactivate all first
+            sidebarNav.querySelectorAll('.sidebar-tab-btn').forEach(btn => btn.classList.remove('active'));
+            sidebarTabContent.querySelectorAll('.sidebar-tab').forEach(tab => tab.classList.remove('active'));
+
+            // Activate stats tab by default
+            const statsBtn = sidebarNav.querySelector('.sidebar-tab-btn[data-tab="stats-tab"]');
+            if (statsBtn) {
+                statsBtn.classList.add('active');
+                const statsContent = document.getElementById('stats-tab');
+                if (statsContent) {
+                    statsContent.classList.add('active');
+                }
+            }
+        }
+    }
+
 
     function updateEntityStatDisplay() {
         entityStatsDisplay.innerHTML = '';
@@ -374,7 +561,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const varTpl = variableTemplate[varName] || {};
             const total = base + bonus;
             const details = bonus !== 0 ? `<span class="stat-item-details">(${base} ${bonus > 0 ? '+': ''}${bonus})</span>` : '';
-            
+
             item.innerHTML = `
                 <img src="${varTpl.icon || ''}" class="stat-item-icon" style="display: ${varTpl.icon ? 'block' : 'none'}">
                 <span class="stat-item-name">${varName}</span>
@@ -388,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function loadEntityEditor(entityId) { editingEntityId = entityId; updateEntityListUI(); updateEntityEditorUI(); }
     function updateComputedVariablesListUI() { computedVariablesListUI.innerHTML = ''; computedVariables.forEach(cv => { const li = document.createElement('li'); li.className = 'list-item'; li.dataset.id = cv.id; if(activeEditor.type === 'computed' && cv.id === activeEditor.id) li.classList.add('editing'); li.innerHTML = `<span class="item-info"><strong>Tổng</strong> = ${cv.formula || '...'}</span><button class="delete-btn delete-computed-variable-btn" data-id="${cv.id}">X</button>`; computedVariablesListUI.appendChild(li); }); }
     function updateRulesListUI() { rulesListUI.innerHTML = ''; conditionalRules.forEach(rule => { const li = document.createElement('li'); li.className = 'list-item'; li.dataset.id = rule.id; if(activeEditor.type === 'conditional' && rule.id === activeEditor.id) li.classList.add('editing'); li.innerHTML = `<span class="item-info">${rule.name || 'Luật không tên'}</span><button class="delete-btn delete-rule-btn" data-id="${rule.id}">X</button>`; rulesListUI.appendChild(li); }); }
-    function loadEditor(type, id) { activeEditor = { type, id }; if (type === 'computed') { const compVar = computedVariables.find(cv => cv.id === id); if (!compVar) return; computedVariableFormulaInput.value = compVar.formula; } else if (type === 'conditional') { const rule = conditionalRules.find(r => r.id === activeEditor.id); if (!rule) return; ruleNameInput.value = rule.name; ruleConditionsContainer.innerHTML = ''; rule.conditions.forEach(cond => ruleConditionsContainer.appendChild(createRuleConditionRow(cond))); ruleActionsContainer.innerHTML = ''; rule.actions.forEach(act => ruleActionsContainer.appendChild(createSetVariableActionRow(act, true))); } 
+    function loadEditor(type, id) { activeEditor = { type, id }; if (type === 'computed') { const compVar = computedVariables.find(cv => cv.id === id); if (!compVar) return; computedVariableFormulaInput.value = compVar.formula; } else if (type === 'conditional') { const rule = conditionalRules.find(r => r.id === activeEditor.id); if (!rule) return; ruleNameInput.value = rule.name; ruleConditionsContainer.innerHTML = ''; rule.conditions.forEach(cond => ruleConditionsContainer.appendChild(createRuleConditionRow(cond))); ruleActionsContainer.innerHTML = ''; rule.actions.forEach(act => ruleActionsContainer.appendChild(createSetVariableActionRow(act, true))); }
     logicEditorPlaceholder.style.display = (activeEditor.id) ? 'none' : 'block';
     computedVariableEditorContent.style.display = (activeEditor.type === 'computed') ? 'block' : 'none';
     ruleEditorContent.style.display = (activeEditor.type === 'conditional') ? 'block' : 'none';
@@ -403,7 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         if (segments.length === 0) return;
         const centerX = canvas.width / 2, centerY = canvas.height / 2, outerRadius = canvas.width / 2 - 10;
-        const totalWeight = segments.reduce((sum, seg) => sum + (seg.weight || 10), 0);
+        const totalWeight = segments.reduce((sum, seg) => sum + (seg.weight || 1), 0);
         let currentAngle = startAngle;
         segments.forEach((segment) => {
             const arc = (segment.weight / totalWeight) * (2 * Math.PI);
@@ -428,20 +615,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateVariableSuggestions() { const suggestions = Object.keys(variableTemplate); variableSuggestionsSettings.innerHTML = ''; variableSuggestionsAction.innerHTML = ''; suggestions.forEach(varName => { const optionHTML = `<option value="${varName}"></option>`; variableSuggestionsSettings.innerHTML += optionHTML; variableSuggestionsAction.innerHTML += optionHTML; }); }
-    function updateCreatorUI() { const currentWheel = wheelsData[currentWheelName]; if(!currentWheel) { wheelTitle.textContent = "Chưa có Vòng Quay"; wheelSettingsPanel.style.display = 'none'; segmentListUI.innerHTML = ''; totalWeightInfo.textContent = ''; pasteWheelBtn.disabled = copiedWheelData === null; drawWheel(); return; } wheelTitle.textContent = currentWheelName || "Chưa có Vòng Quay"; segmentEditorTitle.textContent = editingSegmentIndex !== null ? `Đang Sửa Ô: "${currentWheel.segments[editingSegmentIndex].text}"` : "Thêm / Sửa Ô"; wheelSettingsPanel.style.display = currentWheelName ? 'block' : 'none'; pasteWheelBtn.disabled = copiedWheelData === null; copyWheelBtn.disabled = !currentWheelName; const wheelNames = Object.keys(wheelsData); wheelSelector.innerHTML = ''; wheelNames.forEach(name => { const option = document.createElement('option'); option.value = name; option.textContent = name; wheelSelector.appendChild(option); }); if(currentWheelName) { wheelSelector.value = currentWheelName; } deleteWheelBtn.disabled = !currentWheelName; const segments = currentWheel?.segments || []; segmentListUI.innerHTML = ''; const totalWeight = segments.reduce((sum, seg) => sum + (seg.weight || 10), 0); totalWeightInfo.textContent = `Tổng trọng số: ${totalWeight}`; segments.forEach((segment, index) => { const percentage = totalWeight > 0 ? ((segment.weight / totalWeight) * 100).toFixed(1) : 0; const li = document.createElement('li'); li.className = 'list-item segment-list-item'; li.dataset.index = index; li.draggable = true; if (index === editingSegmentIndex) li.classList.add('editing'); li.innerHTML = `<div class="color-box" style="background-color: ${segment.color};"></div><span class="item-info">${segment.text}</span><span class="segment-weight">${percentage}%</span><button class="delete-btn delete-segment-btn" data-index="${index}">X</button>`; segmentListUI.appendChild(li); }); const settings = currentWheel?.settings; if (settings) { document.getElementById('wheel-settings-title').textContent = `Cài Đặt: "${currentWheelName}"`; spinCountVariableInput.value = settings.spinCountVariable || ''; 
-    segmentRemovalModeSelect.value = settings.removalMode || 'none'; 
+    function updateCreatorUI() { const currentWheel = wheelsData[currentWheelName]; if(!currentWheel) { wheelTitle.textContent = "Chưa có Vòng Quay"; wheelSettingsPanel.style.display = 'none'; segmentListUI.innerHTML = ''; totalWeightInfo.textContent = ''; pasteWheelBtn.disabled = copiedWheelData === null; drawWheel(); return; } wheelTitle.textContent = currentWheelName || "Chưa có Vòng Quay"; segmentEditorTitle.textContent = editingSegmentIndex !== null ? `Đang Sửa Ô: "${currentWheel.segments[editingSegmentIndex].text}"` : "Thêm / Sửa Ô"; wheelSettingsPanel.style.display = currentWheelName ? 'block' : 'none'; pasteWheelBtn.disabled = copiedWheelData === null; copyWheelBtn.disabled = !currentWheelName; const wheelNames = Object.keys(wheelsData); wheelSelector.innerHTML = ''; wheelNames.forEach(name => { const option = document.createElement('option'); option.value = name; option.textContent = name; wheelSelector.appendChild(option); }); if(currentWheelName) { wheelSelector.value = currentWheelName; } deleteWheelBtn.disabled = !currentWheelName; const segments = currentWheel?.segments || []; segmentListUI.innerHTML = ''; const totalWeight = segments.reduce((sum, seg) => sum + (seg.weight || 1), 0); totalWeightInfo.textContent = `Tổng trọng số: ${totalWeight}`; segments.forEach((segment, index) => { const percentage = totalWeight > 0 ? ((segment.weight / totalWeight) * 100).toFixed(1) : 0; const li = document.createElement('li'); li.className = 'list-item segment-list-item'; li.dataset.index = index; li.draggable = true; if (index === editingSegmentIndex) li.classList.add('editing'); li.innerHTML = `<div class="color-box" style="background-color: ${segment.color};"></div><span class="item-info">${segment.text}</span><span class="segment-weight">${percentage}%</span><button class="delete-btn delete-segment-btn" data-index="${index}">X</button>`; segmentListUI.appendChild(li); }); const settings = currentWheel?.settings; if (settings) { document.getElementById('wheel-settings-title').textContent = `Cài Đặt: "${currentWheelName}"`; spinCountVariableInput.value = settings.spinCountVariable || '';
+    segmentRemovalModeSelect.value = settings.removalMode || 'none';
     defaultLinkSelect.innerHTML = '<option value="None">Không liên kết</option>'; wheelNames.forEach(name => { if (name !== currentWheelName) { const option = document.createElement('option'); option.value = name; option.textContent = name; if (name === settings.defaultLink) option.selected = true; defaultLinkSelect.appendChild(option); } }); } updateVariableSuggestions(); drawWheel(); }
     function loadWheel(name) { if (!name || !wheelsData[name]) { currentWheelName = Object.keys(wheelsData)[0] || ''; } else { currentWheelName = name; } const currentWheel = wheelsData[currentWheelName]; if (currentWheel) { if (!currentWheel.settings) { currentWheel.settings = {}; } if (!currentWheel.settings.removalMode) { currentWheel.settings.removalMode = 'none'; } if (typeof currentWheel.settings.spinCountVariable === 'undefined') { currentWheel.settings.spinCountVariable = ''; } if (typeof currentWheel.settings.defaultLink === 'undefined') { currentWheel.settings.defaultLink = 'None'; } } exitEditMode(); }
-    
-    // REWIND & FIX v4.5: Simplified and restored SetVariableActionRow
-    function createSetVariableActionRow(action = {}) { 
-        const actionRow = document.createElement('div'); 
-        actionRow.className = 'set-variable-action-row'; 
+
+    function createSetVariableActionRow(action = {}) {
+        const actionRow = document.createElement('div');
+        actionRow.className = 'set-variable-action-row';
         actionRow.innerHTML = `
             <div class="form-group">
                 <label>Tên biến</label>
                 <input type="text" class="action-var-name" list="variable-suggestions-action" placeholder="Chọn hoặc gõ..." value="${action.target || ''}">
-            </div> 
+            </div>
              <div class="form-group">
                 <label>Mục tiêu</label>
                 <select class="action-var-target-prop">
@@ -461,25 +647,113 @@ document.addEventListener('DOMContentLoaded', () => {
                 <label>Giá trị / Công thức</label>
                 <input type="text" class="action-var-value" placeholder="VD: 10, 'Kiếm Sĩ', suc_manh" value="${action.value || ''}">
             </div>
-            <button class="btn-danger btn-delete-action">-</button>`; 
-        return actionRow; 
+            <button class="btn-danger btn-delete-action">-</button>`;
+        return actionRow;
     }
-    
+
     function enterEditMode(index) { editingSegmentIndex = index; const segment = wheelsData[currentWheelName].segments[index]; editingSegmentData = JSON.parse(JSON.stringify(segment)); populateActionPanelFromEditingState(); updateAllActionSummaries(); mainActionBtn.textContent = "Cập Nhật"; cancelEditBtn.style.display = 'block'; pasteActionsBtn.disabled = copiedActions === null; updateCreatorUI(); }
-    function populateActionPanelFromEditingState() { resetActionPanelVisuals(); const { text, weight, color, actions = [] } = editingSegmentData; segmentTextInput.value = text || ''; segmentWeightInput.value = weight || 10; segmentColorInput.value = color || '#8AC926'; const setVarActions = actions.filter(a => a.type === 'setVariable'); actionSetVariableEnabled.checked = setVarActions.length > 0; setVarActions.forEach(action => setVariableActionsContainer.appendChild(createSetVariableActionRow(action))); const goToWheelAction = actions.find(a => a.type === 'goToWheel'); actionGoToWheelEnabled.checked = !!goToWheelAction; if(goToWheelAction) actionTargetWheelSelect.value = goToWheelAction.target; const playSoundAction = actions.find(a => a.type === 'playSound'); actionPlaySoundEnabled.checked = !!playSoundAction; if(playSoundAction && playSoundAction.soundData) { clearActionSoundBtn.style.display = 'inline-block'; } const conditionalAction = actions.find(a => a.type === 'conditionalReroll'); actionConditionalEnabled.checked = !!conditionalAction; if (conditionalAction) { conditionOperatorSelect.value = conditionalAction.operator; conditionValueInput.value = conditionalAction.value; conditionRerollsInput.value = conditionalAction.maxRerolls || 1; } document.querySelectorAll('#segment-action-panel .action-header input').forEach(el => { const details = el.closest('.action-group').querySelector('.action-details'); if (details) details.style.display = el.checked ? 'flex' : 'none'; }); }
-    function resetActionPanelVisuals() { actionSetVariableEnabled.checked = false; actionGoToWheelEnabled.checked = false; actionConditionalEnabled.checked = false; actionPlaySoundEnabled.checked = false; setVariableActionsContainer.innerHTML = ''; actionSoundUpload.value = ''; clearActionSoundBtn.style.display = 'none'; actionTargetWheelSelect.innerHTML = '<option value="">Chọn Vòng Quay</option>'; Object.keys(wheelsData).forEach(name => { if (name !== currentWheelName) { const option = document.createElement('option'); option.value = name; option.textContent = name; actionTargetWheelSelect.appendChild(option); } }); document.querySelectorAll('#segment-action-panel .action-details').forEach(el => el.style.display = 'none'); document.querySelectorAll('.action-summary').forEach(el => el.textContent = ''); }
-    function updateAllActionSummaries() { const actions = editingSegmentData.actions || []; const setVarActions = actions.filter(a => a.type === 'setVariable'); document.querySelector('#action-setVariable-enabled ~ .action-summary').textContent = setVarActions.length > 0 ? setVarActions.map(a => `${a.target}.${a.targetProperty || 'bonus'} ${a.operator} ${a.value}`).join(', ') : ''; const goToWheelAction = actions.find(a => a.type === 'goToWheel'); document.querySelector('#action-goToWheel-enabled ~ .action-summary').textContent = (goToWheelAction && goToWheelAction.target) ? `-> ${goToWheelAction.target}` : ''; const playSoundAction = actions.find(a => a.type === 'playSound'); document.querySelector('#action-playSound-enabled ~ .action-summary').textContent = (playSoundAction && playSoundAction.soundData) ? `Phát âm thanh tùy chỉnh` : ''; const conditionalAction = actions.find(a => a.type === 'conditionalReroll'); document.querySelector('#action-conditional-enabled ~ .action-summary').textContent = conditionalAction ? `Nếu KQ ${conditionalAction.operator} ${conditionalAction.value}, quay lại ${conditionalAction.maxRerolls} lần` : ''; }
-    function exitEditMode() { editingSegmentIndex = null; editingSegmentData = {}; segmentTextInput.value = ''; segmentWeightInput.value = 10; segmentColorInput.value = '#8AC926'; mainActionBtn.textContent = "Thêm Ô"; cancelEditBtn.style.display = 'none'; resetActionPanelVisuals(); updateCreatorUI(); }
-    function getResult(segmentsForCalc) { if (!segmentsForCalc || segmentsForCalc.length === 0) return null; const totalWeight = segmentsForCalc.reduce((sum, seg) => sum + (seg.weight || 10), 0); const markerAngleRad = 270 * Math.PI / 180; const finalAngle = (markerAngleRad - (startAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); let cumulativeAngle = 0; for (const segment of segmentsForCalc) { const arc = (segment.weight / totalWeight) * (2 * Math.PI); if (finalAngle >= cumulativeAngle && finalAngle < cumulativeAngle + arc) return segment; cumulativeAngle += arc; } return segmentsForCalc[0]; }
-    
+    function populateActionPanelFromEditingState() {
+        resetActionPanelVisuals();
+        const { text, weight, color, actions = [] } = editingSegmentData;
+        segmentTextInput.value = text || '';
+        segmentWeightInput.value = weight || 1;
+        segmentColorInput.value = color || '#8AC926';
+
+        const setVarActions = actions.filter(a => a.type === 'setVariable');
+        actionSetVariableEnabled.checked = setVarActions.length > 0;
+        setVarActions.forEach(action => setVariableActionsContainer.appendChild(createSetVariableActionRow(action)));
+
+        const goToWheelAction = actions.find(a => a.type === 'goToWheel');
+        actionGoToWheelEnabled.checked = !!goToWheelAction;
+        if(goToWheelAction) actionTargetWheelSelect.value = goToWheelAction.target;
+
+        const playSoundAction = actions.find(a => a.type === 'playSound');
+        actionPlaySoundEnabled.checked = !!playSoundAction;
+        if(playSoundAction && playSoundAction.soundData) { clearActionSoundBtn.style.display = 'inline-block'; }
+
+        const conditionalAction = actions.find(a => a.type === 'conditionalReroll');
+        actionConditionalEnabled.checked = !!conditionalAction;
+        if (conditionalAction) { conditionOperatorSelect.value = conditionalAction.operator; conditionValueInput.value = conditionalAction.value; conditionRerollsInput.value = conditionalAction.maxRerolls || 1; }
+        
+        const setSlotsAction = actions.find(a => a.type === 'setCollectionSlots');
+        actionSetCollectionSlotsEnabled.checked = !!setSlotsAction;
+        if(setSlotsAction) {
+            actionSetCollectionSlotsTarget.value = setSlotsAction.targetCollection;
+            actionSetCollectionSlotsValue.value = setSlotsAction.value;
+        }
+
+        const addToCollectionAction = actions.find(a => a.type === 'addToCollection');
+        actionAddToCollectionEnabled.checked = !!addToCollectionAction;
+        if(addToCollectionAction) {
+            actionAddToCollectionTarget.value = addToCollectionAction.targetCollection;
+        }
+
+        document.querySelectorAll('#segment-action-panel .action-header input').forEach(el => { const details = el.closest('.action-group').querySelector('.action-details'); if (details) details.style.display = el.checked ? 'flex' : 'none'; });
+    }
+    function resetActionPanelVisuals() {
+        actionSetVariableEnabled.checked = false;
+        actionGoToWheelEnabled.checked = false;
+        actionConditionalEnabled.checked = false;
+        actionPlaySoundEnabled.checked = false;
+        setVariableActionsContainer.innerHTML = '';
+        actionSoundUpload.value = '';
+        clearActionSoundBtn.style.display = 'none';
+        actionTargetWheelSelect.innerHTML = '<option value="">Chọn Vòng Quay</option>';
+        Object.keys(wheelsData).forEach(name => { if (name !== currentWheelName) { const option = document.createElement('option'); option.value = name; option.textContent = name; actionTargetWheelSelect.appendChild(option); } });
+
+        actionSetCollectionSlotsEnabled.checked = false;
+        actionSetCollectionSlotsValue.value = '';
+        actionAddToCollectionEnabled.checked = false;
+
+        document.querySelectorAll('#segment-action-panel .action-details').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.action-summary').forEach(el => el.textContent = '');
+    }
+    function updateAllActionSummaries() {
+        const actions = editingSegmentData.actions || [];
+        const setVarActions = actions.filter(a => a.type === 'setVariable');
+        document.querySelector('#action-setVariable-enabled ~ .action-summary').textContent = setVarActions.length > 0 ? setVarActions.map(a => `${a.target}.${a.targetProperty || 'bonus'} ${a.operator} ${a.value}`).join(', ') : '';
+       
+        const setSlotsAction = actions.find(a => a.type === 'setCollectionSlots');
+        document.querySelector('#action-setCollectionSlots-enabled ~ .action-summary').textContent = setSlotsAction ? `[${collectionTemplate[setSlotsAction.targetCollection]?.name || '?'}] = ${setSlotsAction.value} ô` : '';
+        
+        const addToCollectionAction = actions.find(a => a.type === 'addToCollection');
+        document.querySelector('#action-addToCollection-enabled ~ .action-summary').textContent = addToCollectionAction ? `Thêm vào [${collectionTemplate[addToCollectionAction.targetCollection]?.name || '?'}]` : '';
+
+        const goToWheelAction = actions.find(a => a.type === 'goToWheel');
+        document.querySelector('#action-goToWheel-enabled ~ .action-summary').textContent = (goToWheelAction && goToWheelAction.target) ? `-> ${goToWheelAction.target}` : '';
+        
+        const playSoundAction = actions.find(a => a.type === 'playSound');
+        document.querySelector('#action-playSound-enabled ~ .action-summary').textContent = (playSoundAction && playSoundAction.soundData) ? `Phát âm thanh tùy chỉnh` : '';
+        
+        const conditionalAction = actions.find(a => a.type === 'conditionalReroll');
+        document.querySelector('#action-conditional-enabled ~ .action-summary').textContent = conditionalAction ? `Nếu KQ ${conditionalAction.operator} ${conditionalAction.value}, quay lại ${conditionalAction.maxRerolls} lần` : '';
+    }
+
+    function exitEditMode() {
+        editingSegmentIndex = null;
+        editingSegmentData = { text: '', weight: 1, color: '#8AC926', actions: [] };
+        segmentTextInput.value = '';
+        segmentWeightInput.value = 1;
+        segmentColorInput.value = '#8AC926';
+        mainActionBtn.textContent = "Thêm Ô";
+        cancelEditBtn.style.display = 'none';
+        resetActionPanelVisuals();
+        updateCreatorUI();
+    }
+
+    function getResult(segmentsForCalc) { if (!segmentsForCalc || segmentsForCalc.length === 0) return null; const totalWeight = segmentsForCalc.reduce((sum, seg) => sum + (seg.weight || 1), 0); const markerAngleRad = 270 * Math.PI / 180; const finalAngle = (markerAngleRad - (startAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); let cumulativeAngle = 0; for (const segment of segmentsForCalc) { const arc = (segment.weight / totalWeight) * (2 * Math.PI); if (finalAngle >= cumulativeAngle && finalAngle < cumulativeAngle + arc) return segment; cumulativeAngle += arc; } return segmentsForCalc[0]; }
+
     function endSpinSequenceCleanup() { wheelDisplayArea.classList.remove('is-spinning'); panelOverlay.style.display = 'none'; spinCountDisplay.textContent = ''; variableSnapshot = null; tickAudio.pause(); tickAudio.currentTime = 0; }
-    function startSpinSequence() { if (isSpinning) return; if (!activeEntityId) { showNotification("Vui lòng chọn một Thực Thể Hoạt Động để quay!", true); return; } const settings = wheelsData[currentWheelName]?.settings; const segments = wheelsData[currentWheelName]?.segments; if (!settings || !segments || segments.length === 0) return; variableSnapshot = JSON.parse(JSON.stringify(entities[activeEntityId].variables)); wheelDisplayArea.classList.add('is-spinning'); let spinCount = 1; const spinVarName = settings.spinCountVariable; const activeVars = getActiveVariables(); if (spinVarName && activeVars.hasOwnProperty(spinVarName)) { const varValue = (activeVars[spinVarName].base || 0) + (activeVars[spinVarName].bonus || 0); if (!isNaN(varValue) && varValue > 0) spinCount = varValue; } const spinJob = { totalSpins: spinCount, spinsLeft: spinCount, temporarySegments: [...segments] }; spin(spinJob); }
+    function startSpinSequence() { if (isSpinning) return; if (!activeEntityId) { showNotification("Vui lòng chọn một Thực Thể Hoạt Động để quay!", true); return; } const settings = wheelsData[currentWheelName]?.settings; const segments = wheelsData[currentWheelName]?.segments; if (!settings || !segments || segments.length === 0) return; variableSnapshot = JSON.parse(JSON.stringify(entities[activeEntityId])); wheelDisplayArea.classList.add('is-spinning'); let spinCount = 1; const spinVarName = settings.spinCountVariable; const activeVars = getActiveVariables(); if (spinVarName && activeVars.hasOwnProperty(spinVarName)) { const varValue = (activeVars[spinVarName].base || 0) + (activeVars[spinVarName].bonus || 0); if (!isNaN(varValue) && varValue > 0) spinCount = varValue; } const spinJob = { totalSpins: spinCount, spinsLeft: spinCount, temporarySegments: [...segments] }; spin(spinJob); }
     function spin(job) { if (job.spinsLeft <= 0 || job.temporarySegments.length < 1) { endSpinSequenceCleanup(); const settings = wheelsData[currentWheelName]?.settings; if (settings && settings.defaultLink && settings.defaultLink !== 'None') { loadWheel(settings.defaultLink); } return; }; isSpinning = true; panelOverlay.style.display = 'block'; spinVelocity = Math.random() * 0.4 + 0.4; if (job.totalSpins > 1) { const currentSpin = job.totalSpins - job.spinsLeft + 1; spinCountDisplay.textContent = `(Lượt: ${currentSpin}/${job.totalSpins})`; } if (tickAudio.src) tickAudio.play(); animate(job); }
     function animate(job) { if (spinVelocity > 0.005) { startAngle += spinVelocity; spinVelocity *= friction; drawWheel(job.temporarySegments); requestAnimationFrame(() => animate(job)); } else if (isSpinning) { isSpinning = false; tickAudio.pause(); tickAudio.currentTime = 0; const result = getResult(job.temporarySegments); if (result) { processSpinResult(result, job); } else { endSpinSequenceCleanup(); } } }
+
     function processSpinResult(result, job) {
         job.spinsLeft--;
-        const activeEntityName = entities[activeEntityId]?.name || 'Thực thể';
-        addLogMessage(`<span class="log-highlight">${activeEntityName}</span> quay trúng ô <span class="log-highlight">"${result.text}"</span>.`);
+        const activeEntity = getActiveEntity();
+        if (!activeEntity) { endSpinSequenceCleanup(); return; }
+
+        addLogMessage(`<span class="log-highlight">${activeEntity.name}</span> quay trúng ô <span class="log-highlight">"${result.text}"</span>.`);
         const actions = result.actions || [];
         const playSoundAction = actions.find(a => a.type === 'playSound');
         if (playSoundAction) playSound(playSoundAction.soundData);
@@ -493,9 +767,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
         showResultPopup(result, () => {
             executeActions(actions, result);
+
+            actions.forEach(action => {
+                switch(action.type) {
+                    case 'setCollectionSlots': {
+                        const targetCollection = action.targetCollection;
+                        if (!activeEntity.collections[targetCollection]) break;
+
+                        let rawValue = action.value;
+                        if (result && typeof rawValue === 'string' && rawValue.trim().toUpperCase() === '[RESULT]') {
+                            rawValue = result.text;
+                        }
+                        const finalValue = evaluateFormula(rawValue);
+                        const newSize = parseInt(finalValue, 10);
+
+                        if (!isNaN(newSize) && newSize >= 0) {
+                            addLogMessage(`-> Kho Chứa <span class="log-highlight">${collectionTemplate[targetCollection]?.name}</span> được đặt thành ${newSize} ô.`);
+                            const currentSlots = activeEntity.collections[targetCollection];
+                            const newSlots = new Array(newSize).fill(null);
+                            for(let i = 0; i < Math.min(currentSlots.length, newSize); i++) {
+                                newSlots[i] = currentSlots[i];
+                            }
+                            activeEntity.collections[targetCollection] = newSlots;
+                        }
+                        break;
+                    }
+                    case 'addToCollection': {
+                        const targetCollection = action.targetCollection;
+                        if (!activeEntity.collections[targetCollection]) break;
+
+                        const slots = activeEntity.collections[targetCollection];
+                        const emptySlotIndex = slots.findIndex(slot => slot === null);
+                        if (emptySlotIndex !== -1) {
+                            slots[emptySlotIndex] = result.text;
+                             addLogMessage(`-> <span class="log-highlight">${result.text}</span> đã được thêm vào Kho Chứa <span class="log-highlight">${collectionTemplate[targetCollection]?.name}</span>.`);
+                        } else {
+                            addLogMessage(`-> Kho Chứa <span class="log-highlight">${collectionTemplate[targetCollection]?.name}</span> đã đầy.`);
+                        }
+                        break;
+                    }
+                }
+            });
+
             evaluateAllRules();
             updateEntityEditorUI();
-            updateEntityStatDisplay();
+            updateSidebarDisplay();
 
             if (wheelWasDeleted) { loadWheel(null); endSpinSequenceCleanup(); return; }
             const nextWheelAction = actions.find(a => a.type === 'goToWheel');
@@ -504,33 +820,28 @@ document.addEventListener('DOMContentLoaded', () => {
             else { endSpinSequenceCleanup(); if (settings && settings.defaultLink && settings.defaultLink !== 'None') { loadWheel(settings.defaultLink); } else if (removalMode === 'temporary') { drawWheel(); } }
         });
     }
-    
+
     // --- EVENT HANDLERS ---
     exportBtn.addEventListener('click', handleExport); importBtn.addEventListener('click', () => importFileInput.click()); importFileInput.addEventListener('change', handleImport);
-    exportEntitiesBtn.addEventListener('click', handleExportEntities); 
-    importEntitiesBtn.addEventListener('click', () => importEntitiesInput.click()); 
-    importEntitiesInput.addEventListener('change', handleImportEntities); 
-    
-    // Variable Template Handlers
+    exportEntitiesBtn.addEventListener('click', handleExportEntities);
+    importEntitiesBtn.addEventListener('click', () => importEntitiesInput.click());
+    importEntitiesInput.addEventListener('change', handleImportEntities);
+
+    // Template Handlers
     addVariableBtn.addEventListener('click', async () => {
         const varName = newVariableNameInput.value.trim().replace(/\s+/g, '_');
         if (!varName || variableTemplate.hasOwnProperty(varName)) return;
 
         const rawValue = newVariableValueInput.value;
         const finalValue = !isNaN(rawValue) && isFinite(rawValue) && rawValue.trim() !== '' ? parseFloat(rawValue) : rawValue;
-        
+
         let iconData = '';
         const iconFile = newVariableIconUpload.files[0];
         if (iconFile) {
             iconData = await new Promise(resolve => handleFileUpload(iconFile, resolve));
         }
 
-        variableTemplate[varName] = { 
-            base: finalValue, 
-            bonus: 0,
-            icon: iconData,
-        };
-        
+        variableTemplate[varName] = { base: finalValue, bonus: 0, icon: iconData };
         newVariableNameInput.value = '';
         newVariableValueInput.value = '0';
         newVariableIconUpload.value = '';
@@ -539,42 +850,79 @@ document.addEventListener('DOMContentLoaded', () => {
             entity.variables[varName] = JSON.parse(JSON.stringify(variableTemplate[varName]));
         });
 
-        updateAllUI(); 
+        updateAllUI();
         throttledSaveState();
     });
-    
+
     variableTemplateListDiv.addEventListener('input', e => {
         const varName = e.target.dataset.varname;
         const prop = e.target.classList.contains('variable-base-input') ? 'base' : 'bonus';
         const rawValue = e.target.value;
         let finalValue = !isNaN(rawValue) && isFinite(rawValue) && rawValue.trim() !== '' ? parseFloat(rawValue) : rawValue;
         variableTemplate[varName][prop] = finalValue;
-
-        Object.values(entities).forEach(entity => {
-            if(entity.variables[varName]) {
-                 entity.variables[varName][prop] = finalValue;
-            }
-        });
         updateAllUI();
         throttledSaveState();
     });
 
-    variableTemplateListDiv.addEventListener('click', (e) => { 
-        if (e.target.matches('.delete-variable-btn')) { 
+    variableTemplateListDiv.addEventListener('click', (e) => {
+        if (e.target.matches('.delete-variable-btn')) {
             const varName = e.target.dataset.varname;
             delete variableTemplate[varName];
-            Object.values(entities).forEach(entity => {
-                delete entity.variables[varName];
-            });
-            updateAllUI(); 
-            throttledSaveState(); 
+            Object.values(entities).forEach(entity => { delete entity.variables[varName]; });
+            updateAllUI();
+            throttledSaveState();
         }
     });
 
+    addCollectionBtn.addEventListener('click', () => {
+        const name = newCollectionNameInput.value.trim();
+        if (!name) return;
+        const id = name.replace(/\s+/g, '_');
+        if (collectionTemplate[id]) {
+            showNotification("Lỗi: Tên Kho Chứa này đã tồn tại.", true);
+            return;
+        }
+        collectionTemplate[id] = { id, name };
+        Object.values(entities).forEach(entity => {
+            if (!entity.collections) entity.collections = {};
+            entity.collections[id] = [];
+        });
+        newCollectionNameInput.value = '';
+        updateCollectionTemplateUI();
+        updateSidebarDisplay();
+        throttledSaveState();
+    });
+
+    collectionTemplateListUI.addEventListener('click', e => {
+        if (e.target.matches('.delete-collection-btn')) {
+            const id = e.target.dataset.id;
+            delete collectionTemplate[id];
+            Object.values(entities).forEach(entity => {
+                if (entity.collections) delete entity.collections[id];
+            });
+            updateAllUI();
+            throttledSaveState();
+        }
+    });
+
+
     // Entity Manager Handlers
-    addEntityBtn.addEventListener('click', () => { const name = newEntityNameInput.value.trim(); if (!name) return; const id = `entity_${Date.now()}`; entities[id] = { id, name, variables: JSON.parse(JSON.stringify(variableTemplate)), avatar: '' }; newEntityNameInput.value = ''; if (!activeEntityId) activeEntityId = id; updateEntityListUI(); updateActiveEntitySelector(); loadEntityEditor(id); throttledSaveState(); });
+    addEntityBtn.addEventListener('click', () => { 
+        const name = newEntityNameInput.value.trim(); 
+        if (!name) return; 
+        const id = `entity_${Date.now()}`;
+        const newCollections = {};
+        Object.keys(collectionTemplate).forEach(collId => { newCollections[collId] = []; });
+        entities[id] = { id, name, variables: JSON.parse(JSON.stringify(variableTemplate)), avatar: '', collections: newCollections }; 
+        newEntityNameInput.value = ''; 
+        if (!activeEntityId) activeEntityId = id; 
+        updateEntityListUI(); 
+        updateActiveEntitySelector(); 
+        loadEntityEditor(id); 
+        throttledSaveState(); 
+    });
     entityListUI.addEventListener('click', e => { const targetLi = e.target.closest('.list-item'); if (!targetLi) return; const id = targetLi.dataset.id; if (e.target.matches('.delete-entity-btn')) { e.stopPropagation(); showConfirmationModal(`Bạn có chắc muốn xóa thực thể "${entities[id].name}"?`, () => { delete entities[id]; if (editingEntityId === id) editingEntityId = null; if (activeEntityId === id) activeEntityId = null; updateAllUI(); throttledSaveState(); }); } else { loadEntityEditor(id); } });
-    entityNameInput.addEventListener('input', (e) => { if(editingEntityId) { entities[editingEntityId].name = e.target.value; entityEditorTitle.textContent = `Chỉnh sửa: ${e.target.value}`; updateEntityListUI(); updateActiveEntitySelector(); throttledSaveState(); } });
+    entityNameInput.addEventListener('input', (e) => { if(editingEntityId) { entities[editingEntityId].name = e.target.value; entityEditorTitle.textContent = `Chỉnh sửa: ${e.target.value}`; updateEntityListUI(); updateActiveEntitySelector(); updateSidebarTitle(); throttledSaveState(); } });
     entityVariablesListDiv.addEventListener('input', e => {
         if(e.target.matches('input[type="text"]')) {
             const entityId = e.target.dataset.entityid;
@@ -583,11 +931,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const rawValue = e.target.value;
             let finalValue = !isNaN(rawValue) && isFinite(rawValue) && rawValue.trim() !== '' ? parseFloat(rawValue) : rawValue;
             entities[entityId].variables[varName][prop] = finalValue;
-            updateEntityStatDisplay();
+            updateSidebarDisplay();
             evaluateAllRules();
             throttledSaveState();
         }
     });
+    entityCollectionsListDiv.addEventListener('input', e => {
+        if (e.target.matches('input[type="text"]')) {
+            const { entityid, collectionid, slotindex } = e.target.dataset;
+            const value = e.target.value;
+
+            if (entities[entityid] && entities[entityid].collections[collectionid]) {
+                entities[entityid].collections[collectionid][parseInt(slotindex)] = value.trim() === '' ? null : value;
+                updateSidebarDisplay();
+                throttledSaveState();
+            }
+        }
+    });
+
 
 
     // Other Logic Handlers
@@ -599,36 +960,14 @@ document.addEventListener('DOMContentLoaded', () => {
     logicEditor.addEventListener('click', (e) => { if (e.target.matches('.btn-delete-action')) { e.target.parentElement.remove(); saveActiveEditor(); } });
     addRuleConditionBtn.addEventListener('click', () => { if (activeEditor.type !== 'conditional') return; const rule = conditionalRules.find(r => r.id === activeEditor.id); rule.conditions.push({ left: '', operator: '==', right: '0' }); loadEditor('conditional', activeEditor.id); throttledSaveState(); });
     addRuleActionBtn.addEventListener('click', () => { if (activeEditor.type !== 'conditional') return; const rule = conditionalRules.find(r => r.id === activeEditor.id); rule.actions.push({ type: 'setVariable', target: '', operator: '=', value: '' }); loadEditor('conditional', activeEditor.id); throttledSaveState(); });
-    
-    // Wheel Studio Handlers
-    copyWheelBtn.addEventListener('click', () => {
-        if (!currentWheelName) return;
-        copiedWheelData = JSON.parse(JSON.stringify(wheelsData[currentWheelName]));
-        pasteWheelBtn.disabled = false;
-        showNotification(`Đã sao chép vòng quay "${currentWheelName}"!`);
-    });
-    pasteWheelBtn.addEventListener('click', () => {
-        if (!copiedWheelData) return;
-        const newName = newWheelNameInput.value.trim().replace(/\s+/g, '_');
-        if (!newName) {
-            showNotification("Vui lòng nhập tên cho vòng quay mới trước khi dán.", true);
-            return;
-        }
-        if (wheelsData[newName]) {
-            showNotification(`Lỗi: Tên vòng quay "${newName}" đã tồn tại.`, true);
-            return;
-        }
-        wheelsData[newName] = JSON.parse(JSON.stringify(copiedWheelData));
-        newWheelNameInput.value = '';
-        loadWheel(newName);
-        throttledSaveState();
-        showNotification(`Đã dán và tạo vòng quay mới "${newName}"!`);
-    });
 
+    // Wheel Studio Handlers
+    copyWheelBtn.addEventListener('click', () => { if (!currentWheelName) return; copiedWheelData = JSON.parse(JSON.stringify(wheelsData[currentWheelName])); pasteWheelBtn.disabled = false; showNotification(`Đã sao chép vòng quay "${currentWheelName}"!`); });
+    pasteWheelBtn.addEventListener('click', () => { if (!copiedWheelData) return; const newName = newWheelNameInput.value.trim().replace(/\s+/g, '_'); if (!newName) { showNotification("Vui lòng nhập tên cho vòng quay mới trước khi dán.", true); return; } if (wheelsData[newName]) { showNotification(`Lỗi: Tên vòng quay "${newName}" đã tồn tại.`, true); return; } wheelsData[newName] = JSON.parse(JSON.stringify(copiedWheelData)); newWheelNameInput.value = ''; loadWheel(newName); throttledSaveState(); showNotification(`Đã dán và tạo vòng quay mới "${newName}"!`); });
     createWheelBtn.addEventListener('click', () => { const name = newWheelNameInput.value.trim().replace(/\s+/g, '_'); if (name && !wheelsData[name]) { wheelsData[name] = { segments: [], settings: { removalMode: 'none', spinCountVariable: '', defaultLink: 'None' } }; newWheelNameInput.value = ''; loadWheel(name); throttledSaveState(); } else if (wheelsData[name]) alert('Lỗi: Tên vòng quay đã tồn tại!'); });
     wheelSelector.addEventListener('change', () => { if (!isSpinning) loadWheel(wheelSelector.value); });
     deleteWheelBtn.addEventListener('click', () => { if (!currentWheelName) return; showConfirmationModal(`Bạn có chắc muốn xóa vòng quay "${currentWheelName}"?`, () => { delete wheelsData[currentWheelName]; loadWheel(Object.keys(wheelsData)[0] || null); throttledSaveState(); }); });
-    mainActionBtn.addEventListener('click', () => { if (!currentWheelName) return; if (editingSegmentIndex !== null) { wheelsData[currentWheelName].segments[editingSegmentIndex] = editingSegmentData; } else { wheelsData[currentWheelName].segments.push(editingSegmentData); } exitEditMode(); throttledSaveState(); });
+    mainActionBtn.addEventListener('click', () => { if (!currentWheelName) return; if (editingSegmentIndex !== null) { wheelsData[currentWheelName].segments[editingSegmentIndex] = editingSegmentData; } else { editingSegmentData.text = segmentTextInput.value; editingSegmentData.weight = parseInt(segmentWeightInput.value) || 1; editingSegmentData.color = segmentColorInput.value; wheelsData[currentWheelName].segments.push(editingSegmentData); } exitEditMode(); throttledSaveState(); });
     cancelEditBtn.addEventListener('click', exitEditMode);
     copyActionsBtn.addEventListener('click', () => { if (editingSegmentIndex !== null) { copiedActions = JSON.parse(JSON.stringify(editingSegmentData.actions || [])); pasteActionsBtn.disabled = false; showNotification("Đã sao chép hành động của ô!"); } });
     pasteActionsBtn.addEventListener('click', () => { if (editingSegmentIndex !== null && copiedActions) { editingSegmentData.actions = JSON.parse(JSON.stringify(copiedActions)); populateActionPanelFromEditingState(); updateAllActionSummaries(); showNotification("Đã dán hành động!"); } });
@@ -638,35 +977,38 @@ document.addEventListener('DOMContentLoaded', () => {
     segmentListUI.addEventListener('dragover', (e) => e.preventDefault());
     segmentListUI.addEventListener('drop', (e) => { e.preventDefault(); if (isSpinning) return; const targetElement = e.target.closest('.segment-list-item'); if (!targetElement) return; const newIndex = parseInt(targetElement.dataset.index); const segments = wheelsData[currentWheelName].segments; if (draggedIndex === newIndex) return; const [removed] = segments.splice(draggedIndex, 1); segments.splice(newIndex, 0, removed); exitEditMode(); throttledSaveState(); });
     spinButton.addEventListener('click', startSpinSequence);
-    resetSpinBtn.addEventListener('click', () => { if (!isSpinning) return; showConfirmationModal("Dừng chuỗi quay và hoàn tác mọi thay đổi về biến số của thực thể đang hoạt động?", () => { isSpinning = false; spinVelocity = 0; if (variableSnapshot) { entities[activeEntityId].variables = JSON.parse(JSON.stringify(variableSnapshot)); } endSpinSequenceCleanup(); updateEntityEditorUI(); updateEntityStatDisplay(); drawWheel(); evaluateAllRules(); showNotification("Chuỗi quay đã được dừng và hoàn tác."); addLogMessage('--- Chuỗi quay đã được dừng và hoàn tác ---'); }); });
+    resetSpinBtn.addEventListener('click', () => { if (!isSpinning) return; showConfirmationModal("Dừng chuỗi quay và hoàn tác mọi thay đổi về thực thể đang hoạt động?", () => { isSpinning = false; spinVelocity = 0; if (variableSnapshot) { entities[activeEntityId] = JSON.parse(JSON.stringify(variableSnapshot)); } endSpinSequenceCleanup(); updateEntityEditorUI(); updateSidebarDisplay(); drawWheel(); evaluateAllRules(); showNotification("Chuỗi quay đã được dừng và hoàn tác."); addLogMessage('--- Chuỗi quay đã được dừng và hoàn tác ---'); }); });
     spinCountVariableInput.addEventListener('input', (e) => { if (currentWheelName) wheelsData[currentWheelName].settings.spinCountVariable = e.target.value.trim().replace(/\s+/g, '_'); throttledSaveState(); });
     segmentRemovalModeSelect.addEventListener('change', (e) => { if (currentWheelName) { wheelsData[currentWheelName].settings.removalMode = e.target.value; throttledSaveState(); } });
     defaultLinkSelect.addEventListener('change', (e) => { if (currentWheelName) wheelsData[currentWheelName].settings.defaultLink = e.target.value; throttledSaveState(); });
-    activeEntitySelector.addEventListener('change', e => { activeEntityId = e.target.value === 'none' ? null : e.target.value; updateEntityStatDisplay(); evaluateAllRules(); if(activeEntityId) { addLogMessage(`Thực thể hoạt động được đổi thành <span class="log-highlight">${entities[activeEntityId]?.name}</span>.`); } else { addLogMessage(`Không có thực thể nào được chọn.`); } });
+    activeEntitySelector.addEventListener('change', e => { activeEntityId = e.target.value === 'none' ? null : e.target.value; updateSidebarDisplay(); evaluateAllRules(); if(activeEntityId) { addLogMessage(`Thực thể hoạt động được đổi thành <span class="log-highlight">${entities[activeEntityId]?.name}</span>.`); } else { addLogMessage(`Không có thực thể nào được chọn.`); } });
     segmentActionPanel.addEventListener('change', (e) => { if (!e.target.matches('.custom-checkbox')) return; const details = e.target.closest('.action-group').querySelector('.action-details'); if (details) details.style.display = e.target.checked ? 'flex' : 'none'; });
-    segmentActionPanel.addEventListener('input', () => { 
-        const actions = []; 
-        if (actionSetVariableEnabled.checked) { 
-            setVariableActionsContainer.querySelectorAll('.set-variable-action-row').forEach(row => { 
-                const actionData = { 
-                    type: 'setVariable', 
-                    target: row.querySelector('.action-var-name').value.trim().replace(/\s+/g, '_'), 
-                    targetProperty: row.querySelector('.action-var-target-prop').value, 
-                    operator: row.querySelector('.action-var-operator').value, 
-                    value: row.querySelector('.action-var-value').value.trim() 
-                }; 
-                if (actionData.target) actions.push(actionData); 
-            }); 
-        } 
-        if (actionGoToWheelEnabled.checked) { actions.push({ type: 'goToWheel', target: actionTargetWheelSelect.value }); } 
-        if (actionPlaySoundEnabled.checked) { if(editingSegmentData.actions?.find(a=>a.type==='playSound')?.soundData) { actions.push(editingSegmentData.actions.find(a=>a.type==='playSound')); } } 
-        if (actionConditionalEnabled.checked) { actions.push({ type: 'conditionalReroll', operator: conditionOperatorSelect.value, value: parseInt(conditionValueInput.value), maxRerolls: parseInt(conditionRerollsInput.value) || 1 }); } 
-        editingSegmentData.actions = actions; 
-        updateAllActionSummaries(); 
+    segmentActionPanel.addEventListener('input', () => {
+        const actions = [];
+        if (actionSetVariableEnabled.checked) {
+            setVariableActionsContainer.querySelectorAll('.set-variable-action-row').forEach(row => {
+                const actionData = { type: 'setVariable', target: row.querySelector('.action-var-name').value.trim().replace(/\s+/g, '_'), targetProperty: row.querySelector('.action-var-target-prop').value, operator: row.querySelector('.action-var-operator').value, value: row.querySelector('.action-var-value').value.trim() };
+                if (actionData.target) actions.push(actionData);
+            });
+        }
+        if (actionSetCollectionSlotsEnabled.checked) {
+            const value = actionSetCollectionSlotsValue.value.trim();
+            const target = actionSetCollectionSlotsTarget.value;
+            if (value && target) actions.push({ type: 'setCollectionSlots', targetCollection: target, value: value });
+        }
+        if (actionAddToCollectionEnabled.checked) {
+            const target = actionAddToCollectionTarget.value;
+            if(target) actions.push({ type: 'addToCollection', targetCollection: target});
+        }
+        if (actionGoToWheelEnabled.checked) { actions.push({ type: 'goToWheel', target: actionTargetWheelSelect.value }); }
+        if (actionPlaySoundEnabled.checked) { if(editingSegmentData.actions?.find(a=>a.type==='playSound')?.soundData) { actions.push(editingSegmentData.actions.find(a=>a.type==='playSound')); } }
+        if (actionConditionalEnabled.checked) { actions.push({ type: 'conditionalReroll', operator: conditionOperatorSelect.value, value: parseInt(conditionValueInput.value), maxRerolls: parseInt(conditionRerollsInput.value) || 1 }); }
+        editingSegmentData.actions = actions;
+        updateAllActionSummaries();
     });
     addSetVariableActionBtn.addEventListener('click', () => { setVariableActionsContainer.appendChild(createSetVariableActionRow()); });
     setVariableActionsContainer.addEventListener('click', (e) => { if (e.target.classList.contains('btn-delete-action')) { e.target.closest('.set-variable-action-row').remove(); segmentActionPanel.dispatchEvent(new Event('input')); }});
-    
+
     // Multimedia Handlers
     tickSoundUpload.addEventListener('change', e => { handleFileUpload(e.target.files[0], (dataUrl) => { projectSettings.tickSoundData = dataUrl; tickAudio.src = dataUrl; clearTickSoundBtn.style.display = 'inline-block'; throttledSaveState(); }); });
     clearTickSoundBtn.addEventListener('click', () => { projectSettings.tickSoundData = ''; tickAudio.src = ''; tickSoundUpload.value = ''; clearTickSoundBtn.style.display = 'none'; throttledSaveState(); });
@@ -674,75 +1016,63 @@ document.addEventListener('DOMContentLoaded', () => {
     clearActionSoundBtn.addEventListener('click', () => { editingSegmentData.actions = editingSegmentData.actions.filter(a => a.type !== 'playSound'); actionSoundUpload.value = ''; clearActionSoundBtn.style.display = 'none'; updateAllActionSummaries(); });
     entityAvatarUpload.addEventListener('change', e => { if(!editingEntityId) return; handleFileUpload(e.target.files[0], (dataUrl) => { entities[editingEntityId].avatar = dataUrl; entityAvatarPreview.src = dataUrl; clearEntityAvatarBtn.style.display = 'inline-block'; throttledSaveState(); }); });
     clearEntityAvatarBtn.addEventListener('click', () => { if(!editingEntityId) return; entities[editingEntityId].avatar = ''; entityAvatarPreview.src = ''; clearEntityAvatarBtn.style.display = 'none'; entityAvatarUpload.value = ''; throttledSaveState(); });
-    
+
     // --- HELPER FUNCTIONS ---
     function showNotification(message, isError = false) { notificationToast.textContent = message; notificationToast.style.backgroundColor = isError ? '#dc3545' : '#252526'; notificationToast.style.borderColor = isError ? '#dc3545' : '#ffde59'; notificationToast.classList.add('show'); setTimeout(() => { notificationToast.classList.remove('show'); }, 3000); }
     function showResultPopup(result, callback) { const modal = document.getElementById('result-modal'); document.getElementById('result-text').innerText = `Kết quả: ${result.text}`; modal.style.display = 'flex'; document.getElementById('close-modal-button').onclick = () => { modal.style.display = 'none'; if (callback) callback(); }; }
-    function showConfirmationModal(message, onConfirm, onCancel) { 
+    function showConfirmationModal(message, onConfirm, onCancel) {
         const modal = document.getElementById('confirmation-modal');
         modal.style.display = 'flex';
-        modal.innerHTML = `<div class="modal-content"><h2>Xác nhận</h2><p style="font-size: 1.2rem; margin-bottom: 25px;">${message}</p><div class="btn-container" style="justify-content:center;"><button id="confirm-yes" class="btn btn-danger">Đồng ý</button><button id="confirm-no" class="btn btn-secondary">Hủy bỏ</button></div></div>`; 
-        
+        modal.innerHTML = `<div class="modal-content"><h2>Xác nhận</h2><p style="font-size: 1.2rem; margin-bottom: 25px;">${message}</p><div class="btn-container" style="justify-content:center;"><button id="confirm-yes" class="btn btn-danger">Đồng ý</button><button id="confirm-no" class="btn btn-secondary">Hủy bỏ</button></div></div>`;
+
         const confirmBtn = document.getElementById('confirm-yes');
         const cancelBtn = document.getElementById('confirm-no');
 
-        const confirmHandler = () => {
-            onConfirm();
-            cleanup();
-        };
-
-        const cancelHandler = () => {
-            if(onCancel) onCancel();
-            cleanup();
-        };
-        
-        const cleanup = () => {
-            modal.style.display = 'none';
-            confirmBtn.removeEventListener('click', confirmHandler);
-            cancelBtn.removeEventListener('click', cancelHandler);
-        };
+        const confirmHandler = () => { onConfirm(); cleanup(); };
+        const cancelHandler = () => { if(onCancel) onCancel(); cleanup(); };
+        const cleanup = () => { modal.style.display = 'none'; confirmBtn.removeEventListener('click', confirmHandler); cancelBtn.removeEventListener('click', cancelHandler); };
 
         confirmBtn.addEventListener('click', confirmHandler);
         cancelBtn.addEventListener('click', cancelHandler);
     }
-    
+
     // --- INITIALIZE APP ---
-    function initialize() { 
-        const savedData = localStorage.getItem('wheelEngineSaveData'); 
-        if (savedData) { 
+    function initialize() {
+        const savedData = localStorage.getItem('wheelEngineSaveData');
+        if (savedData) {
             try {
                 const parsedData = JSON.parse(savedData);
-                 showConfirmationModal(
-                    "Phát hiện phiên làm việc chưa lưu. Bạn có muốn tải lại không?", 
-                    () => { loadState(parsedData); }, 
-                    () => { createDefaultData(); loadWheel(Object.keys(wheelsData)[0]); }
-                ); 
+                 showConfirmationModal( "Phát hiện phiên làm việc chưa lưu. Bạn có muốn tải lại không?", () => { loadState(parsedData); }, () => { createDefaultData(); loadWheel(Object.keys(wheelsData)[0]); });
             } catch(e) {
-                 createDefaultData(); 
-                 loadWheel(Object.keys(wheelsData)[0]); 
+                 createDefaultData(); loadWheel(Object.keys(wheelsData)[0]);
             }
-        } else { 
-            createDefaultData(); 
-            loadWheel(Object.keys(wheelsData)[0]); 
-        } 
+        } else {
+            createDefaultData(); loadWheel(Object.keys(wheelsData)[0]);
+        }
     }
-    
-    function createDefaultData() { 
+
+    function createDefaultData() {
         projectSettings = {};
-        variableTemplate = { 
-            suc_manh: { base: 10, bonus: 0, icon: '' }, 
-            nhanh_nhen: { base: 8, bonus: 0, icon: '' }, 
+        variableTemplate = {
+            suc_manh: { base: 10, bonus: 0, icon: '' },
+            nhanh_nhen: { base: 8, bonus: 0, icon: '' },
             mau_hien_tai: { base: 100, bonus: 0, icon: '' }
         };
+        collectionTemplate = {
+            'Trang_Bi': {id: 'Trang_Bi', name: 'Trang Bị'},
+            'Ky_Nang': {id: 'Ky_Nang', name: 'Kỹ Năng'}
+        };
         const playerId = `entity_${Date.now()}`;
-        entities = { [playerId]: { id: playerId, name: 'Player', variables: JSON.parse(JSON.stringify(variableTemplate)), avatar: '' } };
+        entities = { [playerId]: { id: playerId, name: 'Player', variables: JSON.parse(JSON.stringify(variableTemplate)), avatar: '', collections: {'Trang_Bi': [], 'Ky_Nang': []} } };
         activeEntityId = playerId;
-        wheelsData['Vong_Quay_Chinh'] = { settings: { }, segments: [ { text: 'Tấn Công', weight: 1, color: '#f94144', actions: [{ type: 'setVariable', target: 'mau_hien_tai', targetProperty: 'base', operator: '-=', value: '10' }] }, { text: 'Nâng Cấp', weight: 1, color: '#43aa8b', actions: [{ type: 'setVariable', target: 'suc_manh', targetProperty: 'bonus', operator: '+=', value: '2' }] } ] }; 
+        wheelsData['Vong_Quay_Chinh'] = { settings: { }, segments: [ { text: 'Tấn Công', weight: 1, color: '#f94144', actions: [{ type: 'setVariable', target: 'mau_hien_tai', targetProperty: 'base', operator: '-=', value: '10' }] }, { text: 'Nâng Cấp', weight: 1, color: '#43aa8b', actions: [{ type: 'setVariable', target: 'suc_manh', targetProperty: 'bonus', operator: '+=', value: '2' }] } ] };
         computedVariables = []; conditionalRules = [];
         updateAllUI();
-        evaluateAllRules(); 
-        addLogMessage("Chào mừng đến với Wheel Engine v4.5!");
+        evaluateAllRules();
+        addLogMessage("Chào mừng đến với Wheel Engine v6.1!");
     }
+
     initialize();
+    exitEditMode();
 });
 

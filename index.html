@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wheel Engine - v4.5 (Final)</title>
+    <title>Wheel Engine - v6.2 (Collection System)</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -90,6 +90,38 @@
                                     </div>
                                     <div class="action-details" id="action-setVariable-details"><div id="set-variable-actions-container"></div><button id="add-set-variable-action-btn" class="btn btn-secondary btn-add-action">+ Thêm hành động</button></div>
                                 </div>
+                                 <div class="action-group">
+                                    <div class="action-header">
+                                        <input type="checkbox" id="action-setCollectionSlots-enabled" class="custom-checkbox">
+                                        <label for="action-setCollectionSlots-enabled">Thiết Lập Số Lượng Ô</label>
+                                        <span class="action-summary"></span>
+                                    </div>
+                                    <div class="action-details" id="action-setCollectionSlots-details">
+                                        <div class="form-group">
+                                            <label>Chọn Kho Chứa</label>
+                                            <select id="action-setCollectionSlots-target"></select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Số lượng ô</label>
+                                            <input type="text" id="action-setCollectionSlots-value" placeholder="VD: 5, so_luong_trang_bi, [RESULT]">
+                                            <p class="form-hint">Dùng [RESULT] để lấy kết quả từ ô quay.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="action-group">
+                                    <div class="action-header">
+                                        <input type="checkbox" id="action-addToCollection-enabled" class="custom-checkbox">
+                                        <label for="action-addToCollection-enabled">Thêm vào Ô Trống Kế Tiếp</label>
+                                        <span class="action-summary"></span>
+                                    </div>
+                                    <div class="action-details" id="action-addToCollection-details">
+                                        <div class="form-group">
+                                            <label>Chọn Kho Chứa</label>
+                                            <select id="action-addToCollection-target"></select>
+                                            <p class="form-hint">Sẽ thêm kết quả của ô quay này vào ô trống đầu tiên của kho đã chọn.</p>
+                                        </div>
+                                    </div>
+                                </div>
                                 <div class="action-group">
                                     <div class="action-header">
                                         <input type="checkbox" id="action-goToWheel-enabled" class="custom-checkbox">
@@ -144,7 +176,7 @@
                         </div>
                     </div>
                     <div class="viewer-sidebar">
-                        <div class="panel-section">
+                        <div class="panel-section" id="entity-selector-panel">
                              <h2>Thực Thể Hoạt Động</h2>
                              <div class="form-group" id="active-entity-container">
                                 <select id="active-entity-selector">
@@ -153,9 +185,19 @@
                             </div>
                         </div>
                         <div class="panel-section" id="character-sheet-panel">
-                            <h2>Thông Tin & Nhật Ký</h2>
-                            <div id="entity-stats-display"></div>
-                            <hr>
+                            <h2 id="sidebar-title">Thông Tin</h2>
+                            <nav id="sidebar-nav">
+                                <button class="sidebar-tab-btn active" data-tab="stats-tab">Chỉ Số</button>
+                                <!-- Dynamic tabs will be inserted here -->
+                            </nav>
+                            <div id="sidebar-tab-content">
+                                <div id="stats-tab" class="sidebar-tab active">
+                                    <div id="entity-stats-display"></div>
+                                </div>
+                                <!-- Dynamic tab contents will be inserted here -->
+                            </div>
+                        </div>
+                        <div class="panel-section" id="log-panel">
                             <h3 class="log-title">Nhật ký sự kiện</h3>
                             <ul id="game-log"></ul>
                         </div>
@@ -190,6 +232,17 @@
                                 <input type="file" id="new-variable-icon-upload" class="image-upload-input" accept="image/*">
                             </div>
                             <button id="add-variable-btn" class="btn btn-primary">Thêm Biến Mẫu</button>
+                        </div>
+                         <div class="panel-section">
+                            <h2>Kho Chứa Mẫu</h2>
+                            <p class="form-hint">Định nghĩa các loại trang bị, kỹ năng, vật phẩm... mà Thực Thể có thể chứa.</p>
+                            <ul id="collection-template-list"></ul>
+                            <hr>
+                            <div class="form-group">
+                                <label for="new-collection-name">Tên Kho Chứa mới</label>
+                                <input type="text" id="new-collection-name" placeholder="VD: Trang Bị, Kỹ Năng, Pets...">
+                            </div>
+                            <button id="add-collection-btn" class="btn btn-primary">Thêm Kho Chứa</button>
                         </div>
                         <div class="panel-section">
                             <h2>Biến Tính Toán</h2>
@@ -257,6 +310,9 @@
                              <hr>
                              <h3>Các biến số</h3>
                              <div id="entity-variables-list"></div>
+                             <hr>
+                             <h3>Các Kho Chứa</h3>
+                             <div id="entity-collections-list"></div>
                         </div>
                         <p id="entity-editor-placeholder">Chọn một thực thể từ cột trái để chỉnh sửa.</p>
                     </div>

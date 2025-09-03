@@ -2,6 +2,10 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Inter', sans-serif; background-color: #1a1a1a; color: #f0f0f0; display: flex; height: 100vh; overflow: hidden; }
 hr { border: 0; border-top: 1px solid #555; margin: 1.25rem 0; }
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #2c2c2e; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: #666; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #888; }
 
 /* --- App Architecture --- */
 .app-container { display: flex; flex-direction: column; width: 100%; height: 100%; }
@@ -23,25 +27,72 @@ hr { border: 0; border-top: 1px solid #555; margin: 1.25rem 0; }
 
 .viewer-panel { flex-grow: 1; display: flex; flex-direction: row; justify-content: center; align-items: center; gap: 2rem; padding: 2rem; }
 .wheel-display-area { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 1rem; }
-.viewer-sidebar { width: 350px; height: 100%; display: flex; flex-direction: column; gap: 1.5rem; }
+.viewer-sidebar {
+    width: 380px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    overflow-y: auto;
+    padding-right: 10px;
+}
 .viewer-sidebar .panel-section { width: 100%; }
 #active-entity-container { margin-bottom: 0; }
 #active-entity-container label { display: none; }
 
-#character-sheet-panel { display: flex; flex-direction: column; flex-grow: 1; overflow: hidden; }
-#entity-stats-display { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.95rem; }
+#entity-selector-panel {
+    flex-shrink: 0;
+}
+
+#character-sheet-panel {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    overflow: hidden;
+    min-height: 300px; /* Give it a minimum height */
+    flex-basis: 55%;
+}
+#sidebar-title { text-align: center; color: #ffde59; margin-bottom: 1.25rem; padding-bottom: 0.75rem; border-bottom: 1px solid #555; font-size: 1.25rem; }
+
+#sidebar-nav { display: flex; border-bottom: 1px solid #555; margin-bottom: 1rem; flex-shrink: 0; flex-wrap: wrap; }
+.sidebar-tab-btn { padding: 0.5rem 1rem; background: transparent; border: none; color: #aaa; font-size: 0.9rem; cursor: pointer; border-bottom: 2px solid transparent; }
+.sidebar-tab-btn.active { color: #ffde59; border-bottom-color: #ffde59; }
+
+#sidebar-tab-content { flex-grow: 1; overflow: hidden; position: relative; }
+.sidebar-tab { display: none; height: 100%; flex-direction: column; overflow: hidden; }
+.sidebar-tab.active { display: flex; }
+
+#stats-tab { overflow-y: auto; padding-right: 10px; }
+.collection-tab-content { overflow-y: auto; padding-right: 10px; }
+
+#entity-stats-display { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.95rem; flex-shrink: 0; }
 .stat-item { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; }
 .stat-item-name { color: #ccc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-item-value { font-weight: bold; color: #ffde59; text-align: right; }
 .stat-item-details { font-size: 0.8rem; color: #aaa; grid-column: 3 / 4; justify-self: end; }
 .stat-item-icon { width: 24px; height: 24px; object-fit: contain; }
 
+#log-panel {
+    flex-shrink: 0;
+    flex-grow: 1;
+    flex-basis: 35%; /* Give it a decent base size */
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
 
-.log-title { font-size: 1rem; color: #ccc; margin-bottom: 0.75rem; text-align: center; }
+.log-title { font-size: 1rem; color: #ccc; margin-bottom: 0.75rem; text-align: center; flex-shrink: 0; }
 #game-log { list-style: none; flex-grow: 1; overflow-y: auto; padding-right: 10px; display: flex; flex-direction: column-reverse; }
 #game-log li { background-color: #333; padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.85rem; }
 #game-log .log-highlight { color: #ffde59; font-weight: bold; }
 
+/* Equipment/Collection Display */
+.entity-collection-display { display: flex; flex-direction: column; gap: 0.5rem; }
+.collection-slot { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; background-color: #333; padding: 0.5rem; border-radius: 4px; }
+.collection-slot .slot-index { font-size: 0.8rem; color: #888; }
+.collection-slot .slot-item { color: #f0f0f0; font-weight: 500; }
+.collection-slot .slot-item.empty { color: #888; font-style: italic; }
 
 #panel-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); z-index: 100; cursor: not-allowed; }
 #wheel-title { margin-bottom: 0.5rem; }
@@ -61,9 +112,36 @@ hr { border: 0; border-top: 1px solid #555; margin: 1.25rem 0; }
 #logic-editor, #entity-editor { overflow-y: auto; }
 #logic-editor-placeholder, #entity-editor-placeholder { color: #888; text-align: center; margin-top: 4rem; }
 
+/* Entity Editor Collections */
+#entity-collections-list .collection-editor-group {
+    margin-bottom: 1.5rem;
+}
+#entity-collections-list h4 {
+    color: #ccc;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid #555;
+    padding-bottom: 0.5rem;
+}
+.collection-editor-slot {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+.collection-editor-slot label {
+    color: #888;
+    font-size: 0.9rem;
+}
+.collection-editor-slot input {
+    flex-grow: 1;
+    font-size: 0.9rem;
+    padding: 0.5rem;
+}
+
+
 /* --- General Panel & Form Styles --- */
 .panel-section { background-color: #252526; border-radius: 10px; padding: 1.25rem; }
-.panel-section h2 { text-align: center; color: #ffde59; margin-bottom: 1.25rem; padding-bottom: 0.75rem; border-bottom: 1px solid #555; }
+.panel-section > h2 { text-align: center; color: #ffde59; margin-bottom: 1.25rem; padding-bottom: 0.75rem; border-bottom: 1px solid #555; }
 .form-group { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
 .form-group label { font-weight: 500; font-size: 0.9rem; color: #ccc; }
 input[type="text"], input[type="number"], select { width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid #555; background-color: #404040; color: #fff; font-size: 1rem; }
@@ -88,13 +166,12 @@ input[type="color"] { padding: 0.25rem; height: 40px; border: 2px solid #555; }
 .image-preview-container .delete-btn { position: absolute; top: -8px; right: -8px; z-index: 2; }
 
 /* --- General List Styles --- */
-#segment-list, #rules-list, #variable-template-list, #computed-variables-list, #entity-list { list-style: none; margin: 1rem 0 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+#segment-list, #rules-list, #variable-template-list, #collection-template-list, #computed-variables-list, #entity-list { list-style: none; margin: 1rem 0 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
 .list-item { background-color: #404040; padding: 0.75rem; border-radius: 6px; display: flex; align-items: center; font-size: 0.95rem; cursor: pointer; }
 .list-item:hover { background-color: #505050; }
 .list-item.editing { background-color: #ffde59; color: #1a1a1a; font-weight: bold; }
 .list-item.editing .delete-btn { background-color: #1a1a1a; color: #ffde59; }
 
-/* REWIND & FIX v4.5: Improved Variable Template Layout */
 .variable-item { display: flex; align-items: center; gap: 10px; cursor: default; }
 .variable-name-group { display: flex; align-items: center; gap: 8px; flex-grow: 1; overflow: hidden; }
 .variable-name-group strong { white-space: nowrap; }
