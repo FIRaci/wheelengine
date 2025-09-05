@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wheel Engine - v14.0 (Tag Manager)</title>
+    <title>Wheel Engine - v18.1 (Quantum Logic)</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,6 +22,12 @@
                 <button class="nav-link" data-page="logic-brain">Bộ Não Logic</button>
             </nav>
             <div class="header-actions">
+                <button id="toggle-mode-btn" class="btn btn-primary">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-play-fill" viewBox="0 0 16 16">
+                        <path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+                    </svg>
+                    <span id="toggle-mode-text">Chơi</span>
+                </button>
                 <button id="import-btn" class="btn btn-secondary">Import Dự Án</button>
                 <button id="export-btn" class="btn btn-secondary">Export Dự Án</button>
                 <input type="file" id="import-file-input" accept=".json" style="display: none;">
@@ -63,7 +69,6 @@
                                     </select>
                                 </div>
                                 <div id="generate-options-container">
-                                    <!-- Options for Kho Báu will appear here -->
                                     <div id="item-database-options" class="generate-sub-options">
                                         <div class="form-group">
                                             <label>2. Lọc Vật Phẩm Theo</label>
@@ -190,22 +195,46 @@
                                 </div>
                                  <div class="action-group">
                                     <div class="action-header">
-                                        <input type="checkbox" id="action-removeRandomItem-enabled" class="custom-checkbox">
-                                        <label for="action-removeRandomItem-enabled">Xóa Vật Phẩm Ngẫu Nhiên</label>
+                                        <input type="checkbox" id="action-removeItems-enabled" class="custom-checkbox">
+                                        <label for="action-removeItems-enabled">Xóa Vật Phẩm</label>
                                         <span class="action-summary"></span>
                                     </div>
-                                    <div class="action-details" id="action-removeRandomItem-details">
-                                        <div class="form-group"><label>Chọn Kho Chứa</label><select id="action-removeRandomItem-target"></select></div>
-                                    </div>
-                                </div>
-                                <div class="action-group">
-                                    <div class="action-header">
-                                        <input type="checkbox" id="action-clearCollection-enabled" class="custom-checkbox">
-                                        <label for="action-clearCollection-enabled">Xóa Sạch Kho Chứa</label>
-                                        <span class="action-summary"></span>
-                                    </div>
-                                    <div class="action-details" id="action-clearCollection-details">
-                                        <div class="form-group"><label>Chọn Kho Chứa</label><select id="action-clearCollection-target"></select></div>
+                                    <div class="action-details" id="action-removeItems-details">
+                                        <div class="form-group"><label>Chọn Kho Chứa</label><select id="action-removeItems-target"></select></div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label>Chế độ</label>
+                                                <select id="action-removeItems-mode">
+                                                    <option value="random">Ngẫu nhiên</option>
+                                                    <option value="oldest">Cũ nhất</option>
+                                                    <option value="newest">Mới nhất</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Loại số lượng</label>
+                                                <select id="action-removeItems-amountType">
+                                                    <option value="specific">Số lượng cụ thể</option>
+                                                    <option value="range">Khoảng ngẫu nhiên</option>
+                                                    <option value="all">Toàn bộ</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="remove-items-amount-container">
+                                            <div class="form-group remove-items-amount-specific active">
+                                                <label>Giá trị</label>
+                                                <input type="text" id="action-removeItems-amountValue1" placeholder="VD: 2, _biến_tạm...">
+                                            </div>
+                                            <div class="form-row remove-items-amount-range">
+                                                <div class="form-group">
+                                                    <label>Từ</label>
+                                                    <input type="text" id="action-removeItems-amountValue2" placeholder="VD: 1">
+                                                </div>
+                                                <div class="form-group">
+                                                    <label>Đến</label>
+                                                    <input type="text" id="action-removeItems-amountValue3" placeholder="VD: 3">
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="action-group">
@@ -258,10 +287,17 @@
                         <div class="wheel-container"><div class="wheel-marker"></div><canvas id="wheel-canvas" width="500" height="500"></canvas></div>
                         <div class="viewer-actions">
                             <button id="spin-button" class="btn btn-primary">QUAY!</button>
+                            <button id="skip-button" class="btn btn-secondary">Bỏ Lượt (Skip)</button>
                             <button id="reset-spin-btn" class="btn btn-danger">Dừng & Hoàn Tác</button>
                         </div>
                     </div>
                     <div class="viewer-sidebar">
+                        <div class="panel-section" id="presentation-wheel-panel">
+                            <h2>Vòng Quay Hiện Tại</h2>
+                            <div class="form-group">
+                                <select id="presentation-wheel-selector"></select>
+                           </div>
+                       </div>
                         <div class="panel-section" id="entity-selector-panel">
                              <h2>Thực Thể Hoạt Động</h2>
                              <div class="form-group" id="active-entity-container">
@@ -274,13 +310,11 @@
                             <h2 id="sidebar-title">Thông Tin</h2>
                             <nav id="sidebar-nav">
                                 <button class="sidebar-tab-btn active" data-tab="stats-tab">Chỉ Số</button>
-                                <!-- Dynamic tabs will be inserted here -->
                             </nav>
                             <div id="sidebar-tab-content">
                                 <div id="stats-tab" class="sidebar-tab active">
                                     <div id="entity-stats-display"></div>
                                 </div>
-                                <!-- Dynamic tab contents will be inserted here -->
                             </div>
                         </div>
                         <div class="panel-section" id="log-panel">
@@ -538,7 +572,6 @@
             <h2>Chọn Tag để Tạo Vòng Quay</h2>
             <p class="form-hint">Chỉ những vật phẩm chứa TẤT CẢ các tag được chọn mới được thêm vào.</p>
             <div id="tag-list-for-generation" class="tags-selection-container">
-                <!-- Tags will be dynamically inserted here -->
             </div>
             <div class="btn-container" style="justify-content:center; margin-top: 20px;">
                 <button id="confirm-tag-generation-btn" class="btn btn-primary">Tạo Vòng Quay</button>
