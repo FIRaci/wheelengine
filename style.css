@@ -25,6 +25,35 @@ hr { border: 0; border-top: 1px solid #555; margin: 1.25rem 0; }
 .creator-panel { width: 450px; background-color: #1e1e1e; display: flex; flex-direction: column; position: relative; border-right: 1px solid #444; }
 .panel-content-wrapper { padding: 1.5rem; overflow-y: auto; flex-grow: 1; display: flex; flex-direction: column; gap: 1.5rem; }
 
+#quick-generate-panel {
+    background-color: #2c2c2e;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+#quick-generate-panel h4 {
+    margin: 0;
+    text-align: center;
+}
+#quick-generate-panel .form-group {
+    margin-bottom: 0;
+}
+.generate-sub-options {
+    display: none; /* Hidden by default */
+    flex-direction: column;
+    gap: 1rem;
+    padding-left: 1rem;
+    border-left: 2px solid #555;
+    margin-top: 1rem;
+}
+#execute-generation-btn {
+    margin-top: 0.5rem;
+}
+
+
 .viewer-panel { flex-grow: 1; display: flex; flex-direction: row; justify-content: center; align-items: center; gap: 2rem; padding: 2rem; }
 .wheel-display-area { flex-grow: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 1rem; }
 .viewer-sidebar {
@@ -139,8 +168,8 @@ hr { border: 0; border-top: 1px solid #555; margin: 1.25rem 0; }
 #logic-map-subpage.active { display: block; }
 
 .logic-sidebar { display: flex; flex-direction: column; gap: 1.5rem; overflow-y: auto; padding-right: 15px; }
-#logic-editor, #entity-editor, #item-editor { overflow-y: auto; }
-#logic-editor-placeholder, #entity-editor-placeholder, #item-editor-placeholder { color: #888; text-align: center; margin-top: 4rem; }
+#logic-editor, #entity-editor, #item-editor, #tag-editor { overflow-y: auto; }
+#logic-editor-placeholder, #entity-editor-placeholder, #item-editor-placeholder, #tag-editor-placeholder { color: #888; text-align: center; margin-top: 4rem; }
 
 /* Entity Editor Collections */
 #entity-collections-list .collection-editor-group {
@@ -179,6 +208,7 @@ textarea { resize: vertical; }
 input[type="color"] { padding: 0.25rem; height: 40px; border: 2px solid #555; }
 .form-row { display: flex; gap: 10px; }
 .btn { padding: 0.8rem 1rem; font-size: 1rem; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; }
+.btn:disabled { background-color: #555; color: #999; cursor: not-allowed; }
 .btn-primary { background: linear-gradient(145deg, #ffde59, #ffc107); color: #1a1a1a; }
 .btn-secondary { background-color: #6c757d; color: #fff; }
 .btn-danger { background-color: #dc3545; color: #fff; }
@@ -197,12 +227,22 @@ input[type="color"] { padding: 0.25rem; height: 40px; border: 2px solid #555; }
 .image-preview-container .delete-btn { position: absolute; top: -8px; right: -8px; z-index: 2; }
 
 /* --- General List Styles --- */
-#segment-list, #rules-list, #macros-list, #variable-template-list, #collection-template-list, #computed-variables-list, #entity-list { list-style: none; margin: 1rem 0 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+#segment-list, #rules-list, #macros-list, #variable-template-list, #collection-template-list, #computed-variables-list, #entity-list, #tag-manager-list { list-style: none; margin: 1rem 0 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
 #item-database-list-container .list-item { list-style: none; }
 .list-item { background-color: #404040; padding: 0.75rem; border-radius: 6px; display: flex; align-items: center; font-size: 0.95rem; cursor: pointer; }
 .list-item:hover { background-color: #505050; }
 .list-item.editing { background-color: #ffde59; color: #1a1a1a; font-weight: bold; }
 .list-item.editing .delete-btn { background-color: #1a1a1a; color: #ffde59; }
+
+/* Tag Manager List Item */
+.tag-manager-item-icon {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+
 
 /* New Macro Editor Action Row */
 .macro-action-row {
@@ -319,6 +359,69 @@ input[type="color"] { padding: 0.25rem; height: 40px; border: 2px solid #555; }
 .item-effect-row select, .item-effect-row input {
     padding: 0.5rem;
     font-size: 0.9rem;
+}
+
+
+/* Tag System Styles */
+.tags-display-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 8px;
+    background-color: #404040;
+    border-radius: 8px;
+    min-height: 40px;
+    border: 1px solid #555;
+}
+.tag-pill {
+    background-color: #6c757d;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.tag-pill-icon {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+}
+
+.tags-selection-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+    background-color: #1e1e1e;
+    padding: 1rem;
+    border-radius: 8px;
+}
+.tag-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 6px 12px;
+    border: 1px solid #666;
+    border-radius: 15px;
+    transition: all 0.2s;
+    user-select: none;
+}
+.tag-checkbox-icon {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+}
+.tag-checkbox.selected {
+    background-color: #ffde59;
+    color: #1a1a1a;
+    border-color: #ffc107;
+    font-weight: bold;
 }
 
 

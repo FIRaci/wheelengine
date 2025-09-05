@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wheel Engine - v11.0 (Kho Báu Phân Loại)</title>
+    <title>Wheel Engine - v14.0 (Tag Manager)</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -51,11 +51,45 @@
                             <div class="form-group"><label for="new-wheel-name">Tên Vòng Quay Mới</label><input type="text" id="new-wheel-name" placeholder="VD: Vũ Khí, Kỹ Năng..."></div>
                             <button id="create-wheel-btn" class="btn btn-primary">Tạo Mới</button>
                             <hr>
-                            <h4>Tạo Nhanh</h4>
-                            <p class="form-hint">Tự động điền các ô vào vòng quay hiện tại từ dữ liệu có sẵn.</p>
-                            <div class="btn-container">
-                                <button id="generate-from-items-btn" class="btn btn-secondary">Từ Kho Báu</button>
-                                <button id="generate-from-entities-btn" class="btn btn-secondary">Từ Thực Thể</button>
+                            <div id="quick-generate-panel">
+                                <h4>Tạo Nhanh</h4>
+                                <p class="form-hint">Tự động điền các ô vào vòng quay hiện tại.</p>
+                                <div class="form-group">
+                                    <label>1. Chọn Nguồn Dữ Liệu</label>
+                                    <select id="generate-source-type">
+                                        <option value="">-- Chọn Nguồn --</option>
+                                        <option value="itemDatabase">Từ Kho Báu (Vật phẩm)</option>
+                                        <option value="entities">Từ Thực Thể</option>
+                                    </select>
+                                </div>
+                                <div id="generate-options-container">
+                                    <!-- Options for Kho Báu will appear here -->
+                                    <div id="item-database-options" class="generate-sub-options">
+                                        <div class="form-group">
+                                            <label>2. Lọc Vật Phẩm Theo</label>
+                                            <select id="item-filter-type">
+                                                <option value="">-- Chọn cách lọc --</option>
+                                                <option value="all">Toàn bộ</option>
+                                                <option value="category">Danh Mục (Kho Chứa)</option>
+                                                <option value="tags">Tags</option>
+                                            </select>
+                                        </div>
+                                        <div id="category-filter-options" class="generate-sub-options">
+                                            <div class="form-group">
+                                                <label>3. Chọn Danh Mục</label>
+                                                <select id="category-filter-select"></select>
+                                            </div>
+                                        </div>
+                                        <div id="tag-filter-options" class="generate-sub-options">
+                                             <div class="form-group">
+                                                <label>3. Chọn Tags</label>
+                                                <button id="open-tag-modal-btn" class="btn btn-secondary">Chọn Tags...</button>
+                                                <div id="selected-tags-display" class="tags-display-container"></div>
+                                             </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button id="execute-generation-btn" class="btn btn-primary" disabled>Tạo Vòng Quay</button>
                             </div>
                         </div>
                         <div class="panel-section" id="wheel-settings-panel">
@@ -263,6 +297,7 @@
                     <button class="sub-nav-link active" data-subpage="templates-rules">Mẫu & Logic</button>
                     <button class="sub-nav-link" data-subpage="entities">Quản Lý Thực Thể</button>
                     <button class="sub-nav-link" data-subpage="item-database">Kho Báu (Vật Phẩm)</button>
+                    <button class="sub-nav-link" data-subpage="tag-manager">Quản Lý Tags</button>
                     <button class="sub-nav-link" data-subpage="logic-map">Sơ Đồ Logic</button>
                 </nav>
                 <div id="templates-rules-subpage" class="logic-sub-page active">
@@ -422,12 +457,50 @@
                                 <label for="item-description-input">Mô tả</label>
                                 <textarea id="item-description-input" rows="3"></textarea>
                             </div>
+                            <div class="form-group">
+                                <label for="item-tags-input">Tags (chọn từ danh sách hoặc gõ tên tag mới + Enter)</label>
+                                <input type="text" id="item-tags-input" list="tag-suggestions" placeholder="vũ khí, cận chiến, kim loại...">
+                                <div id="item-tags-display" class="tags-display-container"></div>
+                            </div>
                              <hr>
                              <h3>Hiệu Ứng Cộng Chỉ Số</h3>
                              <div id="item-effects-container"></div>
                              <button id="add-item-effect-btn" class="btn btn-secondary btn-add-action">+ Thêm Hiệu Ứng</button>
                         </div>
                         <p id="item-editor-placeholder">Chọn một vật phẩm từ cột trái để chỉnh sửa.</p>
+                    </div>
+                </div>
+                <div id="tag-manager-subpage" class="logic-sub-page">
+                     <div class="logic-sidebar">
+                        <div class="panel-section">
+                            <h2>Danh Sách Tags</h2>
+                            <p class="form-hint">Quản lý tất cả tag trong dự án của bạn.</p>
+                            <ul id="tag-manager-list"></ul>
+                            <hr>
+                             <div class="form-group">
+                                <label for="new-tag-name-input">Tên Tag Mới</label>
+                                <input type="text" id="new-tag-name-input" placeholder="VD: vũ khí, phép thuật...">
+                            </div>
+                            <button id="add-new-tag-btn" class="btn btn-primary">Thêm Tag</button>
+                        </div>
+                    </div>
+                    <div id="tag-editor" class="panel-section">
+                        <div id="tag-editor-content" style="display: none;">
+                             <h2 id="tag-editor-title">Chỉnh sửa Tag</h2>
+                             <div class="form-group">
+                                 <label for="tag-name-input">Tên Tag</label>
+                                 <input type="text" id="tag-name-input">
+                             </div>
+                            <div class="form-group">
+                                <label>Icon</label>
+                                <div class="image-preview-container avatar-preview">
+                                    <img id="tag-icon-preview" src="" class="image-preview" alt="Tag Icon Preview">
+                                    <button id="clear-tag-icon-btn" class="delete-btn" style="display: none;">X</button>
+                                </div>
+                                <input type="file" id="tag-icon-upload" accept="image/*" class="image-upload-input">
+                            </div>
+                        </div>
+                        <p id="tag-editor-placeholder">Chọn một tag từ cột trái để chỉnh sửa.</p>
                     </div>
                 </div>
                 <div id="logic-map-subpage" class="logic-sub-page">
@@ -459,10 +532,26 @@
     </div>
 
     <div id="confirmation-modal" class="modal-container"></div>
+    
+    <div id="tag-selection-modal" class="modal-container">
+        <div class="modal-content">
+            <h2>Chọn Tag để Tạo Vòng Quay</h2>
+            <p class="form-hint">Chỉ những vật phẩm chứa TẤT CẢ các tag được chọn mới được thêm vào.</p>
+            <div id="tag-list-for-generation" class="tags-selection-container">
+                <!-- Tags will be dynamically inserted here -->
+            </div>
+            <div class="btn-container" style="justify-content:center; margin-top: 20px;">
+                <button id="confirm-tag-generation-btn" class="btn btn-primary">Tạo Vòng Quay</button>
+                <button id="cancel-tag-generation-btn" class="btn btn-secondary">Hủy</button>
+            </div>
+        </div>
+    </div>
+
 
     <datalist id="variable-suggestions-settings"></datalist>
     <datalist id="variable-suggestions-action"></datalist>
     <datalist id="item-suggestions"></datalist>
+    <datalist id="tag-suggestions"></datalist>
     <script src="script.js"></script>
 </body>
 </html>

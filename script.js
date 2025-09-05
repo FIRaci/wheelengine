@@ -43,14 +43,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const variableSuggestionsSettings = document.getElementById('variable-suggestions-settings');
     const variableSuggestionsAction = document.getElementById('variable-suggestions-action');
     const itemSuggestions = document.getElementById('item-suggestions');
+    const tagSuggestions = document.getElementById('tag-suggestions');
     const spinCountDisplay = document.getElementById('spin-count-display');
     const resetSpinBtn = document.getElementById('reset-spin-btn');
     const segmentActionPanel = document.getElementById('segment-action-panel');
     const logicMapContainer = document.getElementById('logic-map-container');
     const copyWheelBtn = document.getElementById('copy-wheel-btn');
     const pasteWheelBtn = document.getElementById('paste-wheel-btn');
-    const generateFromItemsBtn = document.getElementById('generate-from-items-btn');
-    const generateFromEntitiesBtn = document.getElementById('generate-from-entities-btn');
+    
+    // Quick Generate Panel Elements
+    const generateSourceTypeSelect = document.getElementById('generate-source-type');
+    const generateOptionsContainer = document.getElementById('generate-options-container');
+    const itemDatabaseOptions = document.getElementById('item-database-options');
+    const itemFilterTypeSelect = document.getElementById('item-filter-type');
+    const categoryFilterOptions = document.getElementById('category-filter-options');
+    const categoryFilterSelect = document.getElementById('category-filter-select');
+    const tagFilterOptions = document.getElementById('tag-filter-options');
+    const openTagModalBtn = document.getElementById('open-tag-modal-btn');
+    const selectedTagsDisplay = document.getElementById('selected-tags-display');
+    const executeGenerationBtn = document.getElementById('execute-generation-btn');
+
 
     // Collection System DOM Elements
     const actionSetCollectionSlotsEnabled = document.getElementById('action-setCollectionSlots-enabled');
@@ -152,12 +164,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const itemIconUpload = document.getElementById('item-icon-upload');
     const itemNameInput = document.getElementById('item-name-input');
     const itemDescriptionInput = document.getElementById('item-description-input');
+    const itemTagsInput = document.getElementById('item-tags-input');
+    const itemTagsDisplay = document.getElementById('item-tags-display');
     const itemEffectsContainer = document.getElementById('item-effects-container');
     const addItemEffectBtn = document.getElementById('add-item-effect-btn');
 
+    // Tag Manager DOM Elements
+    const tagManagerListUI = document.getElementById('tag-manager-list');
+    const newTagNameInput = document.getElementById('new-tag-name-input');
+    const addNewTagBtn = document.getElementById('add-new-tag-btn');
+    const tagEditor = document.getElementById('tag-editor');
+    const tagEditorPlaceholder = document.getElementById('tag-editor-placeholder');
+    const tagEditorContent = document.getElementById('tag-editor-content');
+    const tagEditorTitle = document.getElementById('tag-editor-title');
+    const tagNameInput = document.getElementById('tag-name-input');
+    const tagIconPreview = document.getElementById('tag-icon-preview');
+    const clearTagIconBtn = document.getElementById('clear-tag-icon-btn');
+    const tagIconUpload = document.getElementById('tag-icon-upload');
+
+
+    // Tag Modal Elements
+    const tagSelectionModal = document.getElementById('tag-selection-modal');
+    const tagListForGeneration = document.getElementById('tag-list-for-generation');
+    const confirmTagGenerationBtn = document.getElementById('confirm-tag-generation-btn');
+    const cancelTagGenerationBtn = document.getElementById('cancel-tag-generation-btn');
+
 
     // Global State
-    let wheelsData = {}, variableTemplate = {}, collectionTemplate = {}, macros = {}, entities = {}, computedVariables = [], conditionalRules = [], projectSettings = {}, itemDatabase = {};
+    let wheelsData = {}, variableTemplate = {}, collectionTemplate = {}, macros = {}, entities = {}, computedVariables = [], conditionalRules = [], projectSettings = {}, itemDatabase = {}, tagDatabase = {};
     let activeEntityId = null;
     let editingEntityId = null;
     let currentWheelName = '', editingSegmentIndex = null;
@@ -169,6 +203,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let saveTimeout = null;
     let variableSnapshot = null;
     let editingSegmentData = {};
+    let generationState = {
+        sourceType: '',
+        filterType: '',
+        category: '',
+        tags: []
+    };
     const MAX_LOG_ENTRIES = 50;
     const UNARY_OPERATORS = ['ceil', 'floor', 'negate'];
 
@@ -177,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
     tickAudio.loop = true;
 
     // --- DATA I/O FUNCTIONS ---
-    function getFullState() { return { wheelsData, variableTemplate, collectionTemplate, macros, entities, computedVariables, conditionalRules, projectSettings, itemDatabase }; }
+    function getFullState() { return { wheelsData, variableTemplate, collectionTemplate, macros, entities, computedVariables, conditionalRules, projectSettings, itemDatabase, tagDatabase }; }
     function throttledSaveState() { clearTimeout(saveTimeout); saveTimeout = setTimeout(() => { try { localStorage.setItem('wheelEngineSaveData', JSON.stringify(getFullState())); showNotification("Đã tự động lưu!"); } catch (e) { console.error("Lỗi khi lưu dữ liệu:", e); showNotification("Lỗi: Không thể tự động lưu.", true); } }, 1000); }
 
     function loadState(stateObject, fromFile = false) {
@@ -188,6 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
         variableTemplate = stateObject.variableTemplate || {};
         collectionTemplate = stateObject.collectionTemplate || {};
         itemDatabase = stateObject.itemDatabase || {};
+        tagDatabase = stateObject.tagDatabase || {};
         macros = stateObject.macros || {};
         entities = stateObject.entities || {};
         conditionalRules = stateObject.conditionalRules || [];
@@ -201,14 +242,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        // Migrate old flat itemDatabase to categorized
-        if (Object.values(itemDatabase).length > 0 && !Object.values(itemDatabase)[0].collectionId) {
+        if (Object.values(itemDatabase).length > 0) {
             const firstCollectionId = Object.keys(collectionTemplate)[0];
-            if (firstCollectionId) {
-                Object.values(itemDatabase).forEach(item => {
+             Object.values(itemDatabase).forEach(item => {
+                if (!item.collectionId && firstCollectionId) {
                     item.collectionId = firstCollectionId;
-                });
-            }
+                }
+                if (!item.tags) {
+                    item.tags = [];
+                }
+            });
         }
 
 
@@ -665,6 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateVariableTemplateUI();
         updateCollectionTemplateUI();
         updateItemDatabaseListUI();
+        updateTagManagerListUI();
         updateMacrosListUI();
         updateComputedVariablesListUI();
         updateRulesListUI();
@@ -674,6 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSidebarDisplay();
         updateCreatorUI();
         updateItemSuggestions();
+        updateTagSuggestions();
         clearTickSoundBtn.style.display = projectSettings.tickSoundData ? 'inline-block' : 'none';
     }
 
@@ -743,6 +788,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function updateTagManagerListUI() {
+        tagManagerListUI.innerHTML = '';
+        Object.values(tagDatabase).sort((a,b) => a.name.localeCompare(b.name)).forEach(tag => {
+            const li = document.createElement('li');
+            li.className = 'list-item';
+            li.dataset.id = tag.id;
+            if(activeEditor.type === 'tag' && tag.id === activeEditor.id) li.classList.add('editing');
+            li.innerHTML = `
+                <img src="${tag.icon || 'https://placehold.co/24x24/404040/888?text=?'}" class="tag-manager-item-icon">
+                <span class="item-info">${tag.name || 'Tag không tên'}</span>
+                <button class="delete-btn delete-tag-btn" data-id="${tag.id}">X</button>`;
+            tagManagerListUI.appendChild(li);
+        });
+    }
+
     function updateMacrosListUI() {
         macrosListUI.innerHTML = '';
         Object.values(macros).sort((a,b) => a.name.localeCompare(b.name)).forEach(macro => {
@@ -767,6 +827,7 @@ document.addEventListener('DOMContentLoaded', () => {
         actionRemoveRandomItemTarget.innerHTML = optionsHTML;
         actionClearCollectionTarget.innerHTML = optionsHTML;
         itemCategorySelect.innerHTML = optionsHTML;
+        categoryFilterSelect.innerHTML = `<option value="">-- Chọn Danh Mục --</option>` + optionsHTML;
     }
 
     function updateMacroSelectorDropdown() {
@@ -967,6 +1028,9 @@ document.addEventListener('DOMContentLoaded', () => {
         itemEditor.style.display = 'grid'; // Make sure the parent is visible
         itemEditorPlaceholder.style.display = 'block';
         itemEditorContent.style.display = 'none';
+        tagEditor.style.display = 'grid';
+        tagEditorPlaceholder.style.display = 'block';
+        tagEditorContent.style.display = 'none';
 
 
         if (type === 'computed') {
@@ -1002,17 +1066,30 @@ document.addEventListener('DOMContentLoaded', () => {
             itemIconPreview.src = item.icon || '';
             clearItemIconBtn.style.display = item.icon ? 'inline-block' : 'none';
 
+            itemTagsInput.value = '';
+            updateTagPills();
+
             itemEffectsContainer.innerHTML = '';
             (item.effects || []).forEach(effect => itemEffectsContainer.appendChild(createItemEffectRow(effect)));
             
             itemEditorPlaceholder.style.display = 'none';
             itemEditorContent.style.display = 'block';
+        } else if (type === 'tag') {
+            const tag = tagDatabase[id];
+            if (!tag) return;
+            tagEditorTitle.textContent = `Chỉnh sửa: ${tag.name}`;
+            tagNameInput.value = tag.name;
+            tagIconPreview.src = tag.icon || '';
+            clearTagIconBtn.style.display = tag.icon ? 'inline-block' : 'none';
+            tagEditorPlaceholder.style.display = 'none';
+            tagEditorContent.style.display = 'block';
         }
         
         updateComputedVariablesListUI();
         updateRulesListUI();
         updateMacrosListUI();
         updateItemDatabaseListUI();
+        updateTagManagerListUI();
     }
 
     function saveActiveEditor() {
@@ -1119,6 +1196,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                     updateItemDatabaseListUI();
                     updateItemSuggestions();
+                }
+                break;
+            case 'tag':
+                const tag = tagDatabase[activeEditor.id];
+                if(tag) {
+                    tag.name = tagNameInput.value.trim();
+                    updateTagManagerListUI();
+                    updateTagSuggestions();
                 }
                 break;
         }
@@ -1387,16 +1472,29 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function generateWheelSegments(sourceType) {
+    function generateWheelSegments(sourceType, filters = {}) {
         const currentWheel = wheelsData[currentWheelName];
         if (!currentWheel) return;
 
         let sourceData;
         if (sourceType === 'itemDatabase') {
             sourceData = Object.values(itemDatabase);
+             if (filters.category) {
+                sourceData = sourceData.filter(item => item.collectionId === filters.category);
+            }
+            if (filters.tags && filters.tags.length > 0) {
+                sourceData = sourceData.filter(item => 
+                    filters.tags.every(tag => item.tags && item.tags.includes(tag))
+                );
+            }
         } else if (sourceType === 'entities') {
             sourceData = Object.values(entities);
         } else {
+            return;
+        }
+        
+        if (sourceData.length === 0) {
+            showNotification("Không tìm thấy dữ liệu nào khớp với lựa chọn của bạn.", true);
             return;
         }
 
@@ -1405,22 +1503,23 @@ document.addEventListener('DOMContentLoaded', () => {
         sourceData.forEach(item => {
             const newSegment = {
                 text: item.name,
-                description: item.description || '', // Use item description if available
+                description: item.description || '',
                 weight: 1,
-                color: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`, // Random color
+                color: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`,
                 actions: []
             };
             currentWheel.segments.push(newSegment);
         });
 
-        showNotification(`Đã tạo thành công ${currentWheel.segments.length} ô mới từ ${sourceType === 'itemDatabase' ? 'Kho Báu' : 'Thực Thể'}!`);
-        exitEditMode(); // Resets the editor panel and redraws the wheel
+        showNotification(`Đã tạo thành công ${currentWheel.segments.length} ô mới!`);
+        exitEditMode();
         throttledSaveState();
     }
 
 
     function updateVariableSuggestions() { const suggestions = Object.keys(variableTemplate); variableSuggestionsSettings.innerHTML = ''; variableSuggestionsAction.innerHTML = ''; suggestions.forEach(varName => { const optionHTML = `<option value="${varName}"></option>`; variableSuggestionsSettings.innerHTML += optionHTML; variableSuggestionsAction.innerHTML += optionHTML; }); }
     function updateItemSuggestions() { itemSuggestions.innerHTML = ''; Object.values(itemDatabase).forEach(item => { const option = document.createElement('option'); option.value = item.name; itemSuggestions.appendChild(option); });}
+    function updateTagSuggestions() { tagSuggestions.innerHTML = ''; Object.values(tagDatabase).forEach(tag => { const option = document.createElement('option'); option.value = tag.name; tagSuggestions.appendChild(option); });}
     function updateCreatorUI() { const currentWheel = wheelsData[currentWheelName]; if(!currentWheel) { wheelTitle.textContent = "Chưa có Vòng Quay"; wheelSettingsPanel.style.display = 'none'; segmentListUI.innerHTML = ''; totalWeightInfo.textContent = ''; pasteWheelBtn.disabled = copiedWheelData === null; drawWheel(); return; } wheelTitle.textContent = currentWheelName || "Chưa có Vòng Quay"; segmentEditorTitle.textContent = editingSegmentIndex !== null ? `Đang Sửa Ô: "${currentWheel.segments[editingSegmentIndex].text}"` : "Thêm / Sửa Ô"; wheelSettingsPanel.style.display = currentWheelName ? 'block' : 'none'; pasteWheelBtn.disabled = copiedWheelData === null; copyWheelBtn.disabled = !currentWheelName; const wheelNames = Object.keys(wheelsData); wheelSelector.innerHTML = ''; wheelNames.forEach(name => { const option = document.createElement('option'); option.value = name; option.textContent = name; wheelSelector.appendChild(option); }); if(currentWheelName) { wheelSelector.value = currentWheelName; } deleteWheelBtn.disabled = !currentWheelName; const segments = currentWheel?.segments || []; segmentListUI.innerHTML = ''; const totalWeight = segments.reduce((sum, seg) => sum + (seg.weight || 1), 0); totalWeightInfo.textContent = `Tổng trọng số: ${totalWeight}`; segments.forEach((segment, index) => { const percentage = totalWeight > 0 ? ((segment.weight / totalWeight) * 100).toFixed(1) : 0; const li = document.createElement('li'); li.className = 'list-item segment-list-item'; li.dataset.index = index; li.draggable = true; if (index === editingSegmentIndex) li.classList.add('editing'); li.innerHTML = `<div class="color-box" style="background-color: ${segment.color};"></div><span class="item-info">${segment.text}</span><span class="segment-weight">${percentage}%</span><button class="delete-btn delete-segment-btn" data-index="${index}">X</button>`; segmentListUI.appendChild(li); }); const settings = currentWheel?.settings; if (settings) { document.getElementById('wheel-settings-title').textContent = `Cài Đặt: "${currentWheelName}"`; spinCountVariableInput.value = settings.spinCountVariable || '';
     segmentRemovalModeSelect.value = settings.removalMode || 'none';
     defaultLinkSelect.innerHTML = '<option value="None">Không liên kết</option>'; wheelNames.forEach(name => { if (name !== currentWheelName) { const option = document.createElement('option'); option.value = name; option.textContent = name; if (name === settings.defaultLink) option.selected = true; defaultLinkSelect.appendChild(option); } }); } updateVariableSuggestions(); drawWheel(); }
@@ -1594,34 +1693,146 @@ document.addEventListener('DOMContentLoaded', () => {
     importEntitiesBtn.addEventListener('click', () => importEntitiesInput.click());
     importEntitiesInput.addEventListener('change', handleImportEntities);
 
-    generateFromItemsBtn.addEventListener('click', () => {
+    // Quick Generate Panel Handlers
+    function resetGeneratorPanel() {
+        generationState = { sourceType: '', filterType: '', category: '', tags: [] };
+        generateSourceTypeSelect.value = '';
+        itemFilterTypeSelect.value = '';
+        categoryFilterSelect.value = '';
+        selectedTagsDisplay.innerHTML = '';
+        updateGeneratorUI();
+    }
+
+    function updateGeneratorUI() {
+        const { sourceType, filterType, category, tags } = generationState;
+
+        // Show/hide main options
+        itemDatabaseOptions.style.display = sourceType === 'itemDatabase' ? 'flex' : 'none';
+
+        // Show/hide sub-options for itemDatabase
+        if (sourceType === 'itemDatabase') {
+            categoryFilterOptions.style.display = filterType === 'category' ? 'flex' : 'none';
+            tagFilterOptions.style.display = filterType === 'tags' ? 'flex' : 'none';
+        } else {
+            categoryFilterOptions.style.display = 'none';
+            tagFilterOptions.style.display = 'none';
+        }
+
+        // Enable/disable the final button
+        let isReady = false;
+        if (sourceType === 'entities') {
+            isReady = true;
+        } else if (sourceType === 'itemDatabase') {
+            if (filterType === 'all') {
+                isReady = true;
+            } else if (filterType === 'category' && category) {
+                isReady = true;
+            } else if (filterType === 'tags' && tags.length > 0) {
+                isReady = true;
+            }
+        }
+        executeGenerationBtn.disabled = !isReady;
+    }
+
+    generateSourceTypeSelect.addEventListener('change', () => {
+        generationState.sourceType = generateSourceTypeSelect.value;
+        generationState.filterType = '';
+        generationState.category = '';
+        generationState.tags = [];
+        itemFilterTypeSelect.value = '';
+        categoryFilterSelect.value = '';
+        selectedTagsDisplay.innerHTML = '';
+        updateGeneratorUI();
+    });
+
+    itemFilterTypeSelect.addEventListener('change', () => {
+        generationState.filterType = itemFilterTypeSelect.value;
+        generationState.category = '';
+        generationState.tags = [];
+        categoryFilterSelect.value = '';
+        selectedTagsDisplay.innerHTML = '';
+        updateGeneratorUI();
+    });
+
+    categoryFilterSelect.addEventListener('change', () => {
+        generationState.category = categoryFilterSelect.value;
+        updateGeneratorUI();
+    });
+
+    openTagModalBtn.addEventListener('click', () => {
+        const allTags = Object.values(tagDatabase).sort((a,b) => a.name.localeCompare(b.name));
+        if (allTags.length === 0) {
+            showNotification("Chưa có tag nào được tạo trong Quản Lý Tags.", true);
+            return;
+        }
+
+        tagListForGeneration.innerHTML = '';
+        allTags.forEach(tag => {
+            const tagEl = document.createElement('div');
+            tagEl.className = 'tag-checkbox';
+            tagEl.dataset.tag = tag.name;
+            tagEl.innerHTML = `<img src="${tag.icon || 'https://placehold.co/18x18/666/ccc?text=?'}" class="tag-checkbox-icon"><span>${tag.name}</span>`;
+            
+            if (generationState.tags.includes(tag.name)) {
+                tagEl.classList.add('selected');
+            }
+            tagListForGeneration.appendChild(tagEl);
+        });
+
+        tagSelectionModal.style.display = 'flex';
+    });
+
+    tagListForGeneration.addEventListener('click', e => {
+        if (e.target.matches('.tag-checkbox')) {
+            e.target.classList.toggle('selected');
+        }
+    });
+
+    cancelTagGenerationBtn.addEventListener('click', () => {
+        tagSelectionModal.style.display = 'none';
+    });
+    
+    confirmTagGenerationBtn.addEventListener('click', () => {
+        generationState.tags = Array.from(tagListForGeneration.querySelectorAll('.tag-checkbox.selected')).map(el => el.dataset.tag);
+        
+        selectedTagsDisplay.innerHTML = '';
+        generationState.tags.forEach(tagName => {
+            const tagData = Object.values(tagDatabase).find(t => t.name === tagName);
+            const pill = document.createElement('span');
+            pill.className = 'tag-pill';
+            pill.innerHTML = `
+                <img src="${tagData?.icon || 'https://placehold.co/16x16/6c757d/fff?text=?'}" class="tag-pill-icon">
+                ${tagName}
+            `;
+            selectedTagsDisplay.appendChild(pill);
+        });
+        
+        tagSelectionModal.style.display = 'none';
+        updateGeneratorUI();
+    });
+
+    executeGenerationBtn.addEventListener('click', () => {
         if (!currentWheelName) {
             showNotification("Vui lòng chọn hoặc tạo một vòng quay trước.", true);
             return;
         }
-        if (Object.keys(itemDatabase).length === 0) {
-            showNotification("Kho Báu trống, không có gì để tạo.", true);
-            return;
+
+        const { sourceType, filterType, category, tags } = generationState;
+        let filters = {};
+
+        if (sourceType === 'itemDatabase') {
+            if (filterType === 'category') {
+                filters.category = category;
+            } else if (filterType === 'tags') {
+                filters.tags = tags;
+            }
         }
-        showConfirmationModal(`Việc này sẽ XÓA TẤT CẢ các ô hiện tại của vòng quay "${currentWheelName}" và thay thế bằng các vật phẩm từ Kho Báu. Bạn có chắc chắn?`, () => {
-            generateWheelSegments('itemDatabase');
+        
+        showConfirmationModal(`Việc này sẽ XÓA TẤT CẢ các ô hiện tại của vòng quay "${currentWheelName}" và thay thế bằng dữ liệu đã chọn. Bạn có chắc chắn?`, () => {
+            generateWheelSegments(sourceType, filters);
+            resetGeneratorPanel();
         });
     });
-
-    generateFromEntitiesBtn.addEventListener('click', () => {
-        if (!currentWheelName) {
-            showNotification("Vui lòng chọn hoặc tạo một vòng quay trước.", true);
-            return;
-        }
-        if (Object.keys(entities).length === 0) {
-            showNotification("Không có Thực Thể nào để tạo.", true);
-            return;
-        }
-        showConfirmationModal(`Việc này sẽ XÓA TẤT CẢ các ô hiện tại của vòng quay "${currentWheelName}" và thay thế bằng tên các Thực Thể. Bạn có chắc chắn?`, () => {
-            generateWheelSegments('entities');
-        });
-    });
-
 
     // Template Handlers
     addVariableBtn.addEventListener('click', async () => {
@@ -1755,7 +1966,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Item Database Handlers
-    itemDatabaseListContainer.addEventListener('click', e => {
+     itemDatabaseListContainer.addEventListener('click', e => {
         if (e.target.matches('.add-item-to-category-btn')) {
             const collectionId = e.target.dataset.collectionId;
             if (!collectionId) return;
@@ -1766,6 +1977,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 description: '',
                 icon: '',
                 effects: [],
+                tags: [],
                 collectionId: collectionId
             };
             itemDatabase[newItem.id] = newItem;
@@ -1802,7 +2014,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     itemEditor.addEventListener('input', (e) => {
-        if(e.target.closest('#item-editor-content')) {
+        if(e.target.closest('#item-editor-content') && e.target.id !== 'item-tags-input') {
             saveActiveEditor();
         }
     });
@@ -1811,6 +2023,103 @@ document.addEventListener('DOMContentLoaded', () => {
         if(e.target.matches('.btn-delete-action')) {
             e.target.parentElement.remove();
             saveActiveEditor();
+        }
+    });
+    
+    // Tag Manager Handlers
+    addNewTagBtn.addEventListener('click', () => {
+        const name = newTagNameInput.value.trim();
+        if (!name) return;
+        if (Object.values(tagDatabase).some(t => t.name === name)) {
+            showNotification(`Lỗi: Tag "${name}" đã tồn tại.`, true);
+            return;
+        }
+        const newTag = { id: `tag_${Date.now()}`, name, icon: '' };
+        tagDatabase[newTag.id] = newTag;
+        newTagNameInput.value = '';
+        updateAllUI();
+        loadEditor('tag', newTag.id);
+        throttledSaveState();
+    });
+
+    tagManagerListUI.addEventListener('click', e => {
+        const targetLi = e.target.closest('.list-item');
+        if (!targetLi) return;
+        const id = targetLi.dataset.id;
+        if (e.target.matches('.delete-tag-btn')) {
+            e.stopPropagation();
+            const tagName = tagDatabase[id].name;
+            showConfirmationModal(`Bạn có chắc muốn xóa tag "${tagName}"? Tag này cũng sẽ bị xóa khỏi tất cả các vật phẩm.`, () => {
+                delete tagDatabase[id];
+                // Remove this tag from all items
+                Object.values(itemDatabase).forEach(item => {
+                    if (item.tags) {
+                        item.tags = item.tags.filter(t => t !== tagName);
+                    }
+                });
+                if (activeEditor.id === id) activeEditor.id = null;
+                updateAllUI();
+                loadEditor(null, null);
+                throttledSaveState();
+            });
+        } else {
+            loadEditor('tag', id);
+        }
+    });
+    
+    tagEditor.addEventListener('input', e => {
+        if(e.target.closest('#tag-editor-content')) {
+            saveActiveEditor();
+        }
+    });
+
+    tagIconUpload.addEventListener('change', e => { if(activeEditor.type !== 'tag') return; handleFileUpload(e.target.files[0], (dataUrl) => { tagDatabase[activeEditor.id].icon = dataUrl; tagIconPreview.src = dataUrl; clearTagIconBtn.style.display = 'inline-block'; saveActiveEditor(); }); });
+    clearTagIconBtn.addEventListener('click', () => { if(activeEditor.type !== 'tag') return; tagDatabase[activeEditor.id].icon = ''; tagIconPreview.src = ''; clearTagIconBtn.style.display = 'none'; tagIconUpload.value = ''; saveActiveEditor(); });
+
+
+    function updateTagPills() {
+        if (activeEditor.type !== 'item' || !activeEditor.id) {
+            itemTagsDisplay.innerHTML = '';
+            return;
+        }
+        const item = itemDatabase[activeEditor.id];
+        itemTagsDisplay.innerHTML = '';
+        if (item && item.tags) {
+            item.tags.forEach(tagName => {
+                const tagData = Object.values(tagDatabase).find(t => t.name === tagName);
+                const pill = document.createElement('span');
+                pill.className = 'tag-pill';
+                pill.innerHTML = `
+                 <img src="${tagData?.icon || 'https://placehold.co/16x16/6c757d/fff?text=?'}" class="tag-pill-icon">
+                 ${tagName}
+                `;
+                itemTagsDisplay.appendChild(pill);
+            });
+        }
+    }
+    
+    itemTagsInput.addEventListener('keydown', e => {
+        if (e.key === ',' || e.key === 'Enter') {
+            e.preventDefault();
+            const tagName = itemTagsInput.value.trim();
+            if (tagName) {
+                const item = itemDatabase[activeEditor.id];
+                // Ensure tag exists in database, if not, create it
+                let tagExists = Object.values(tagDatabase).some(t => t.name === tagName);
+                if (!tagExists) {
+                    const newTag = { id: `tag_${Date.now()}`, name: tagName, icon: '' };
+                    tagDatabase[newTag.id] = newTag;
+                    updateAllUI(); // Update manager and suggestions
+                }
+
+                if (item && !item.tags.includes(tagName)) {
+                    item.tags.push(tagName);
+                    item.tags.sort();
+                    updateTagPills();
+                    throttledSaveState();
+                }
+            }
+            itemTagsInput.value = '';
         }
     });
 
@@ -2051,9 +2360,15 @@ document.addEventListener('DOMContentLoaded', () => {
             'Trang_Bi': {id: 'Trang_Bi', name: 'Trang Bị'},
             'Ky_Nang': {id: 'Ky_Nang', name: 'Kỹ Năng'}
         };
+        tagDatabase = {
+            'tag_1': { id: 'tag_1', name: 'vũ khí', icon: ''},
+            'tag_2': { id: 'tag_2', name: 'cận chiến', icon: ''},
+            'tag_3': { id: 'tag_3', name: 'giáp', icon: ''},
+            'tag_4': { id: 'tag_4', name: 'thân', icon: ''}
+        };
         itemDatabase = {
-            'item_1': { id: 'item_1', name: 'Kiếm Sắt', description: 'Một thanh kiếm cơ bản, hơi cùn.\n\n+5 Sức Mạnh', icon: '', effects: [{ target: 'suc_manh', operator: '+=', value: 5 }], collectionId: 'Trang_Bi' },
-            'item_2': { id: 'item_2', name: 'Giáp Da', description: 'Tăng một chút khả năng phòng thủ.\n\n+20 Máu', icon: '', effects: [{ target: 'mau_hien_tai', operator: '+=', value: 20 }], collectionId: 'Trang_Bi' }
+            'item_1': { id: 'item_1', name: 'Kiếm Sắt', description: 'Một thanh kiếm cơ bản, hơi cùn.\n\n+5 Sức Mạnh', icon: '', effects: [{ target: 'suc_manh', operator: '+=', value: 5 }], tags: ['vũ khí', 'cận chiến'], collectionId: 'Trang_Bi' },
+            'item_2': { id: 'item_2', name: 'Giáp Da', description: 'Tăng một chút khả năng phòng thủ.\n\n+20 Máu', icon: '', effects: [{ target: 'mau_hien_tai', operator: '+=', value: 20 }], tags: ['giáp', 'thân'], collectionId: 'Trang_Bi' }
         };
         macros = {
             'macro_default': { id: 'macro_default', name: 'Trang Bị Cho Thief', actions: [
@@ -2071,10 +2386,11 @@ document.addEventListener('DOMContentLoaded', () => {
         ]}];
         updateAllUI();
         recalculateActiveEntityStats();
-        addLogMessage("Chào mừng đến với Wheel Engine v11.0!");
+        addLogMessage("Chào mừng đến với Wheel Engine v14.0!");
     }
 
     initialize();
     exitEditMode();
+    resetGeneratorPanel();
 });
 
