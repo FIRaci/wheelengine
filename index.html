@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wheel Engine - v18.1 (Quantum Logic)</title>
+    <title>Wheel Engine - v19.0 (Final Polish)</title>
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -54,7 +54,7 @@
                                 <button id="paste-wheel-btn" class="btn btn-secondary" disabled>Paste Vòng Quay</button>
                             </div>
                             <hr>
-                            <div class="form-group"><label for="new-wheel-name">Tên Vòng Quay Mới</label><input type="text" id="new-wheel-name" placeholder="VD: Vũ Khí, Kỹ Năng..."></div>
+                            <div class="form-group"><label for="new-wheel-name">Tên Vòng Quay Mới</label><input type="text" id="new-wheel-name" placeholder="Vũ Khí, Kỹ Năng..."></div>
                             <button id="create-wheel-btn" class="btn btn-primary">Tạo Mới</button>
                             <hr>
                             <div id="quick-generate-panel">
@@ -99,7 +99,7 @@
                         </div>
                         <div class="panel-section" id="wheel-settings-panel">
                              <h3 id="wheel-settings-title">Cài Đặt Vòng Quay</h3>
-                            <div class="form-group"><label for="spin-count-variable">Biến Số Lần Quay</label><input type="text" id="spin-count-variable" list="variable-suggestions-settings" placeholder="VD: so_lan_quay"></div>
+                            <div class="form-group"><label for="spin-count-variable">Biến Số Lần Quay</label><input type="text" id="spin-count-variable" list="variable-suggestions-settings" placeholder="so_lan_quay"></div>
                             <div class="form-group">
                                 <label for="segment-removal-mode">Chế độ xóa ô sau khi trúng</label>
                                 <select id="segment-removal-mode">
@@ -121,8 +121,8 @@
                         </div>
                         <div class="panel-section">
                             <h3 id="segment-editor-title">Chỉnh Sửa Ô</h3>
-                             <div class="form-group"><label for="segment-text">Nội dung ô (Tên Phần Thưởng)</label><input type="text" id="segment-text" placeholder="VD: Giày Da, 10 Vàng..." list="item-suggestions"></div>
-                             <div class="form-group"><label for="segment-description">Mô tả ẩn (Cốt truyện, giải thích)</label><textarea id="segment-description" rows="3" placeholder="Mô tả này sẽ hiện ra trong pop-up kết quả..."></textarea></div>
+                             <div class="form-group"><label for="segment-text">Nội dung ô (Tên Phần Thưởng)</label><input type="text" id="segment-text" list="item-suggestions"></div>
+                             <div class="form-group"><label for="segment-description">Mô tả ẩn</label><textarea id="segment-description" rows="3" placeholder="Mô tả này sẽ hiện ra trong pop-up kết quả..."></textarea></div>
                             <div class="form-row">
                                 <div class="form-group" style="flex-grow: 1;"><label for="segment-weight">Tỷ lệ (Trọng số)</label><input type="number" id="segment-weight" value="1" min="1"></div>
                                 <div class="form-group"><label for="segment-color">Màu sắc</label><input type="color" id="segment-color" value="#8AC926"></div>
@@ -161,8 +161,7 @@
                                         </div>
                                         <div class="form-group">
                                             <label>Số lượng ô</label>
-                                            <input type="text" id="action-setCollectionSlots-value" placeholder="VD: 5, so_luong_trang_bi, [RESULT]">
-                                            <p class="form-hint">Dùng [RESULT] để lấy kết quả từ ô quay.</p>
+                                            <input type="text" id="action-setCollectionSlots-value" placeholder="[RESULT], 5, bien_so...">
                                         </div>
                                     </div>
                                 </div>
@@ -176,7 +175,7 @@
                                         <div class="form-group">
                                             <label>Chọn Kho Chứa</label>
                                             <select id="action-addToCollection-target"></select>
-                                            <p class="form-hint">Sẽ thêm kết quả của ô quay này vào ô trống đầu tiên của kho đã chọn.</p>
+                                            <p class="form-hint">Sẽ thêm kết quả của ô quay ([RESULT]) vào ô trống đầu tiên.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -188,9 +187,8 @@
                                     </div>
                                     <div class="action-details" id="action-setItemInSlot-details">
                                         <div class="form-group"><label>Chọn Kho Chứa</label><select id="action-setItemInSlot-target"></select></div>
-                                        <div class="form-group"><label>Vị trí ô</label><input type="text" id="action-setItemInSlot-slot" placeholder="VD: 1, [CURRENT] + 1..."></div>
-                                        <div class="form-group"><label>Tên vật phẩm</label><input type="text" id="action-setItemInSlot-value" list="item-suggestions" placeholder="VD: Kiếm Sắt, [RESULT], [NONE]..."></div>
-                                        <p class="form-hint">Dùng [CURRENT] để lấy số vật phẩm đang có.<br>Dùng [NONE] để xóa vật phẩm khỏi ô này.</p>
+                                        <div class="form-group"><label>Vị trí ô</label><input type="text" id="action-setItemInSlot-slot" placeholder="[CURRENT]+1, 1..."></div>
+                                        <div class="form-group"><label>Tên vật phẩm</label><input type="text" id="action-setItemInSlot-value" list="item-suggestions" placeholder="[RESULT], [NONE]..."></div>
                                     </div>
                                 </div>
                                  <div class="action-group">
@@ -222,16 +220,16 @@
                                         <div class="remove-items-amount-container">
                                             <div class="form-group remove-items-amount-specific active">
                                                 <label>Giá trị</label>
-                                                <input type="text" id="action-removeItems-amountValue1" placeholder="VD: 2, _biến_tạm...">
+                                                <input type="text" id="action-removeItems-amountValue1" placeholder="2, _biến_tạm...">
                                             </div>
                                             <div class="form-row remove-items-amount-range">
                                                 <div class="form-group">
                                                     <label>Từ</label>
-                                                    <input type="text" id="action-removeItems-amountValue2" placeholder="VD: 1">
+                                                    <input type="text" id="action-removeItems-amountValue2" placeholder="1">
                                                 </div>
                                                 <div class="form-group">
                                                     <label>Đến</label>
-                                                    <input type="text" id="action-removeItems-amountValue3" placeholder="VD: 3">
+                                                    <input type="text" id="action-removeItems-amountValue3" placeholder="3">
                                                 </div>
                                             </div>
                                         </div>
@@ -343,7 +341,7 @@
                             <hr>
                             <div class="form-group">
                                 <label for="new-variable-name">Tên biến mới</label>
-                                <input type="text" id="new-variable-name" placeholder="VD: vu_khi, kinh_nghiem...">
+                                <input type="text" id="new-variable-name" placeholder="suc_manh, mau_toi_da...">
                             </div>
                             <div class="form-group">
                                 <label for="new-variable-value">Giá trị Gốc (Base)</label>
@@ -362,7 +360,7 @@
                             <hr>
                             <div class="form-group">
                                 <label for="new-collection-name">Tên Kho Chứa mới</label>
-                                <input type="text" id="new-collection-name" placeholder="VD: Trang Bị, Kỹ Năng, Pets...">
+                                <input type="text" id="new-collection-name" placeholder="Trang Bị, Kỹ Năng...">
                             </div>
                             <button id="add-collection-btn" class="btn btn-primary">Thêm Kho Chứa</button>
                         </div>
@@ -390,7 +388,7 @@
                             <h2 id="macro-editor-title">Chỉnh Sửa Macro</h2>
                             <div class="form-group">
                                 <label for="macro-name-input">Tên Macro</label>
-                                <input type="text" id="macro-name-input" placeholder="VD: Trang Bị Cho Thief">
+                                <input type="text" id="macro-name-input">
                             </div>
                             <div class="rule-block">
                                 <h3 class="rule-block-title">THỰC HIỆN CÁC HÀNH ĐỘNG</h3>
@@ -400,11 +398,11 @@
                         </div>
                         <div id="computed-variable-editor-content" style="display: none;">
                             <h2 id="computed-variable-editor-title">Chỉnh Sửa Biến Tính Toán</h2>
-                            <div class="form-group"> <label>Công thức</label> <input type="text" id="computed-variable-formula" placeholder="VD: suc_manh_base + nhanh_nhen_base"></div>
+                            <div class="form-group"> <label>Công thức</label> <input type="text" id="computed-variable-formula" placeholder="suc_manh_base + nhanh_nhen_base"></div>
                         </div>
                         <div id="rule-editor-content" style="display: none;">
                             <h2 id="rule-editor-title">Chỉnh Sửa Luật</h2>
-                            <div class="form-group"><label for="rule-name-input">Tên Luật</label><input type="text" id="rule-name-input" placeholder="VD: Tăng Chí Mạng Khi Máu Thấp"></div>
+                            <div class="form-group"><label for="rule-name-input">Tên Luật</label><input type="text" id="rule-name-input"></div>
                             <div id="rule-blocks-container"></div>
                             <div class="btn-container">
                                 <button id="add-rule-if-else-btn" class="btn btn-secondary">+ Thêm khối NẾU...THÌ (ELSE IF)</button>
@@ -492,8 +490,8 @@
                                 <textarea id="item-description-input" rows="3"></textarea>
                             </div>
                             <div class="form-group">
-                                <label for="item-tags-input">Tags (chọn từ danh sách hoặc gõ tên tag mới + Enter)</label>
-                                <input type="text" id="item-tags-input" list="tag-suggestions" placeholder="vũ khí, cận chiến, kim loại...">
+                                <label for="item-tags-input">Tags</label>
+                                <input type="text" id="item-tags-input" list="tag-suggestions" placeholder="Gõ tên tag và nhấn Enter...">
                                 <div id="item-tags-display" class="tags-display-container"></div>
                             </div>
                              <hr>
@@ -513,7 +511,7 @@
                             <hr>
                              <div class="form-group">
                                 <label for="new-tag-name-input">Tên Tag Mới</label>
-                                <input type="text" id="new-tag-name-input" placeholder="VD: vũ khí, phép thuật...">
+                                <input type="text" id="new-tag-name-input" placeholder="vũ khí, phép thuật...">
                             </div>
                             <button id="add-new-tag-btn" class="btn btn-primary">Thêm Tag</button>
                         </div>
@@ -545,41 +543,10 @@
     </div>
 
     <div id="notification-toast"></div>
-
-    <div id="result-modal" class="modal-container">
-        <div class="modal-content">
-            <h2 id="result-title"></h2>
-            <p id="result-description"></p>
-            <button id="close-modal-button" class="btn btn-primary">OK</button>
-        </div>
-    </div>
-    
-    <div id="item-info-modal" class="modal-container">
-        <div class="modal-content">
-            <div class="item-info-header">
-                <img id="item-info-icon" src="" alt="Item Icon">
-                <h2 id="item-info-title"></h2>
-            </div>
-            <p id="item-info-description"></p>
-            <button id="close-item-info-modal-button" class="btn btn-primary">OK</button>
-        </div>
-    </div>
-
+    <div id="result-modal" class="modal-container"> <div class="modal-content"> <h2 id="result-title"></h2> <p id="result-description"></p> <button id="close-modal-button" class="btn btn-primary">OK</button> </div> </div>
+    <div id="item-info-modal" class="modal-container"> <div class="modal-content"> <div class="item-info-header"> <img id="item-info-icon" src="" alt="Item Icon"> <h2 id="item-info-title"></h2> </div> <p id="item-info-description"></p> <button id="close-item-info-modal-button" class="btn btn-primary">OK</button> </div> </div>
     <div id="confirmation-modal" class="modal-container"></div>
-    
-    <div id="tag-selection-modal" class="modal-container">
-        <div class="modal-content">
-            <h2>Chọn Tag để Tạo Vòng Quay</h2>
-            <p class="form-hint">Chỉ những vật phẩm chứa TẤT CẢ các tag được chọn mới được thêm vào.</p>
-            <div id="tag-list-for-generation" class="tags-selection-container">
-            </div>
-            <div class="btn-container" style="justify-content:center; margin-top: 20px;">
-                <button id="confirm-tag-generation-btn" class="btn btn-primary">Tạo Vòng Quay</button>
-                <button id="cancel-tag-generation-btn" class="btn btn-secondary">Hủy</button>
-            </div>
-        </div>
-    </div>
-
+    <div id="tag-selection-modal" class="modal-container"> <div class="modal-content"> <h2>Chọn Tag để Tạo Vòng Quay</h2> <p class="form-hint">Chỉ những vật phẩm chứa TẤT CẢ các tag được chọn mới được thêm vào.</p> <div id="tag-list-for-generation" class="tags-selection-container"> </div> <div class="btn-container" style="justify-content:center; margin-top: 20px;"> <button id="confirm-tag-generation-btn" class="btn btn-primary">Tạo Vòng Quay</button> <button id="cancel-tag-generation-btn" class="btn btn-secondary">Hủy</button> </div> </div> </div>
 
     <datalist id="variable-suggestions-settings"></datalist>
     <datalist id="variable-suggestions-action"></datalist>

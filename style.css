@@ -228,6 +228,7 @@ input[type="color"] { padding: 0.25rem; height: 40px; border: 2px solid #555; }
 .macro-action-row .action-fields-container > div.active { display: flex; }
 .macro-action-row .action-fields-container .form-group { margin-bottom: 0; }
 .macro-action-row .action-fields-container .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.macro-action-row .tag-filter-group { margin-top: 0.5rem; }
 
 
 /* Item Editor Specifics */
