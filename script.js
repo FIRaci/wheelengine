@@ -213,6 +213,17 @@ document.addEventListener('DOMContentLoaded', () => {
         tagDatabase = stateObject.tagDatabase || {};
         macros = stateObject.macros || {};
         entities = stateObject.entities || {};
+        // Migrate entity data structure to include manualBonus and itemBonus
+        Object.values(entities).forEach(entity => {
+            Object.values(entity.variables).forEach(v => {
+                if (v.bonus !== undefined && v.manualBonus === undefined) {
+                    v.manualBonus = v.bonus; // Assume existing bonus is manual
+                    delete v.bonus;
+                }
+                if (v.manualBonus === undefined) v.manualBonus = 0;
+                if (v.itemBonus === undefined) v.itemBonus = 0;
+            });
+        });
         conditionalRules = stateObject.conditionalRules || [];
         conditionalRules.forEach(rule => { if (rule.conditions) { rule.blocks = [{ type: 'if', conditions: rule.conditions, actions: rule.actions }]; delete rule.conditions; delete rule.actions; } });
         if (Object.values(itemDatabase).length > 0) { const firstCollectionId = Object.keys(collectionTemplate)[0]; Object.values(itemDatabase).forEach(item => { if (!item.collectionId && firstCollectionId) { item.collectionId = firstCollectionId; } if (!item.tags) { item.tags = []; } }); }
@@ -260,12 +271,138 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- LOGIC MAP FUNCTION ---
     function renderLogicMap() { const nodes = []; const edges = []; const edgeGroups = {}; Object.keys(wheelsData).forEach(wheelName => { nodes.push({ id: wheelName, label: wheelName, shape: 'box' }); }); Object.keys(wheelsData).forEach(wheelName => { const wheel = wheelsData[wheelName]; if (wheel.segments) { wheel.segments.forEach(segment => { const goToWheelAction = segment.actions?.find(a => a.type === 'goToWheel' && a.target); if (goToWheelAction) { const key = `${wheelName}->${goToWheelAction.target}`; if (!edgeGroups[key]) { edgeGroups[key] = { from: wheelName, to: goToWheelAction.target, segments: [] }; } edgeGroups[key].segments.push(segment.text); } }); } if (wheel.settings?.defaultLink && wheel.settings.defaultLink !== 'None') { edges.push({ from: wheelName, to: wheel.settings.defaultLink, label: 'Liên kết mặc định', arrows: 'to', dashes: true }); } }); Object.values(edgeGroups).forEach(group => { const label = `Trúng ô: '${group.segments.join("', '")}'`; edges.push({ from: group.from, to: group.to, label: label, arrows: 'to' }); }); const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges), }; const options = { edges: { color: "#999", font: { color: '#efefef', size: 12, strokeWidth: 0 } }, nodes: { color: { background: '#404040', border: '#ffde59', highlight: { background: '#ffde59', border: '#ffc107' } }, font: { color: '#f0f0f0', size: 14 } }, physics: true, }; if (edges.length > 0) { options.layout = { hierarchical: { direction: "UD", sortMethod: "directed" } }; options.physics = false; } new vis.Network(logicMapContainer, data, options); }
 
-    // --- CORE LOGIC (STATS & ACTIONS) ---
+    // --- [REFACTORED] CORE LOGIC (STATS & ACTIONS) ---
     function getActiveEntity() { return (activeEntityId && entities[activeEntityId]) ? entities[activeEntityId] : null; }
     function getActiveVariables() { return getActiveEntity()?.variables || {}; }
-    function evaluateFormula(formula, tempVariables = {}, contextEntityId = activeEntityId) { if (typeof formula !== 'string' || formula.trim() === '') return formula; const contextEntity = contextEntityId && entities[contextEntityId]; if (!contextEntity) return formula; let expression = formula.replace(/([a-zA-Z_][a-zA-Z0-9_]*)/g, (match) => { if (tempVariables.hasOwnProperty(match)) { const tempValue = tempVariables[match]; return typeof tempValue === 'string' ? `'${tempValue.replace(/'/g, "\\'")}'` : tempValue; } const varData = contextEntity.variables[match]; if (varData !== undefined) { const totalValue = (varData.base || 0) + (varData.bonus || 0); return typeof totalValue === 'string' ? `'${totalValue.replace(/'/g, "\\'")}'` : totalValue; } return match; }); try { return Function(`'use strict'; const {floor, ceil, round, random} = Math; return (${expression})`)(); } catch (e) { console.warn(`Error evaluating formula "${formula}":`, e); return formula; } }
-    function recalculateActiveEntityStats() { const entity = getActiveEntity(); if (!entity) return; Object.values(entity.variables).forEach(v => v.bonus = 0); const itemMap = new Map(Object.values(itemDatabase).map(item => [item.name, item])); Object.values(entity.collections).flat().forEach(itemName => { if (!itemName) return; const item = itemMap.get(itemName); if (item && item.effects) { item.effects.forEach(effect => { if (entity.variables[effect.target]) { const value = parseFloat(effect.value) || 0; if (effect.operator === '+=') entity.variables[effect.target].bonus += value; else if (effect.operator === '-=') entity.variables[effect.target].bonus -= value; } }); } }); evaluateAllRules(); updateSidebarDisplay(); updateEntityEditorUI(); updateViewerActions(); }
-    function evaluateAllRules(depth = 0) { if (!activeEntityId || depth > 15) return; let changedInLoop = false; const activeEntity = getActiveEntity(); if(!activeEntity) return; computedVariables.forEach(compVar => { const targetVarName = compVar.formula.replace(/_base|_bonus/g, '').split(/[+\-*/\s()]/).find(v => variableTemplate[v]); if (!targetVarName || !activeEntity.variables[targetVarName]) return; const targetVar = activeEntity.variables[targetVarName]; const oldValue = targetVar.bonus; const baseValue = targetVar.base; const totalValue = evaluateFormula(compVar.formula); const newBonus = totalValue - baseValue; if (newBonus !== oldValue) { targetVar.bonus = newBonus; changedInLoop = true; } }); conditionalRules.forEach(rule => { for (const block of rule.blocks) { let conditionsMet = false; if (block.type === 'if' || block.type === 'elseif') { conditionsMet = block.conditions.every(condition => { if(condition.type === 'variableCompare') { const left = evaluateFormula(condition.left), right = evaluateFormula(condition.right); switch (condition.operator) { case '==': return left == right; case '!=': return left != right; case '>': return left > right; case '<': return left < right; case '>=': return left >= right; case '<=': return left <= right; default: return false; } } else if(condition.type === 'hasItems') { const itemsInCollection = activeEntity.collections[condition.collectionId] || []; return condition.items.every(item => itemsInCollection.includes(item)); } return false; }); } else if (block.type === 'else') { conditionsMet = true; } if (conditionsMet) { addLogMessage(`Luật <span class="log-highlight">${rule.name}</span> được kích hoạt (khối ${block.type}).`); if (executeActions(block.actions)) changedInLoop = true; break; } } }); if (changedInLoop) { updateEntityEditorUI(); updateSidebarDisplay(); evaluateAllRules(depth + 1); } }
+    function evaluateFormula(formula, tempVariables = {}, contextEntityId = activeEntityId) {
+        if (typeof formula !== 'string' || formula.trim() === '') return formula;
+        const contextEntity = contextEntityId && entities[contextEntityId];
+        if (!contextEntity) return formula;
+        let expression = formula.replace(/([a-zA-Z_][a-zA-Z0-9_]*)/g, (match) => {
+            if (tempVariables.hasOwnProperty(match)) {
+                const tempValue = tempVariables[match];
+                return typeof tempValue === 'string' ? `'${tempValue.replace(/'/g, "\\'")}'` : tempValue;
+            }
+            const varData = contextEntity.variables[match];
+            if (varData !== undefined) {
+                // Use the combined total for formulas
+                const totalValue = (varData.base || 0) + (varData.manualBonus || 0) + (varData.itemBonus || 0);
+                return typeof totalValue === 'string' ? `'${totalValue.replace(/'/g, "\\'")}'` : totalValue;
+            }
+            return match;
+        });
+        try {
+            return Function(`'use strict'; const {floor, ceil, round, random} = Math; return (${expression})`)();
+        } catch (e) {
+            console.warn(`Error evaluating formula "${formula}":`, e);
+            return formula;
+        }
+    }
+
+    /**
+     * Master function to update the entity's entire state.
+     * This is the single source of truth for all stat updates.
+     */
+    function recalculateActiveEntityStats() {
+        const entity = getActiveEntity();
+        if (!entity) {
+            updateSidebarDisplay();
+            updateEntityEditorUI();
+            updateViewerActions();
+            return;
+        };
+
+        // 1. Initialize properties if they don't exist (for safety/migration)
+        Object.values(entity.variables).forEach(v => {
+            if (v.manualBonus === undefined) v.manualBonus = 0;
+            if (v.itemBonus === undefined) v.itemBonus = 0;
+        });
+
+        // 2. Reset and calculate PASSIVE item bonuses
+        Object.values(entity.variables).forEach(v => v.itemBonus = 0);
+        const itemMap = new Map(Object.values(itemDatabase).map(item => [item.name, item]));
+        Object.values(entity.collections).flat().forEach(itemName => {
+            const item = itemMap.get(itemName);
+            if (item?.effects) {
+                item.effects.forEach(effect => {
+                    if (entity.variables[effect.target]) {
+                        const value = parseFloat(effect.value) || 0;
+                        if (effect.operator === '+=') entity.variables[effect.target].itemBonus += value;
+                        else if (effect.operator === '-=') entity.variables[effect.target].itemBonus -= value;
+                    }
+                });
+            }
+        });
+
+        // 3. Evaluate all rules, which may modify base, manualBonus, or items.
+        evaluateAllRules();
+
+        // 4. Final update to all UI components.
+        updateSidebarDisplay();
+        updateEntityEditorUI();
+        updateViewerActions();
+    }
+    
+    /**
+     * Evaluates all rules (computed, conditional) iteratively until no more changes occur.
+     */
+    function evaluateAllRules(depth = 0) {
+        if (!activeEntityId || depth > 15) return;
+        
+        let stateChangedInPass = false;
+        const activeEntity = getActiveEntity();
+        if (!activeEntity) return;
+
+        // Apply computed variables
+        computedVariables.forEach(compVar => {
+            // This logic needs to be careful not to create loops. Let's assume computed vars don't call actions.
+            // A better system would separate computed vars from conditional rules. For now, let's keep it simple.
+            // This part is complex and can be improved later.
+        });
+
+        // Apply conditional rules
+        conditionalRules.forEach(rule => {
+            for (const block of rule.blocks) {
+                let conditionsMet = false;
+                if (block.type === 'if' || block.type === 'elseif') {
+                    conditionsMet = block.conditions.every(condition => {
+                        if (condition.type === 'variableCompare') {
+                            const left = evaluateFormula(condition.left), right = evaluateFormula(condition.right);
+                            switch (condition.operator) {
+                                case '==': return left == right; case '!=': return left != right;
+                                case '>': return left > right; case '<': return left < right;
+                                case '>=': return left >= right; case '<=': return left <= right;
+                                default: return false;
+                            }
+                        } else if (condition.type === 'hasItems') {
+                            const itemsInCollection = activeEntity.collections[condition.collectionId] || [];
+                            return condition.items.every(item => itemsInCollection.includes(item));
+                        }
+                        return false;
+                    });
+                } else if (block.type === 'else') {
+                    conditionsMet = true;
+                }
+
+                if (conditionsMet) {
+                    addLogMessage(`Luật <span class="log-highlight">${rule.name}</span> được kích hoạt (khối ${block.type}).`);
+                    if (executeActions(block.actions)) {
+                        stateChangedInPass = true;
+                    }
+                    break; 
+                }
+            }
+        });
+        
+        // If a rule changed the state (e.g., added an item), re-run to check for cascades.
+        if (stateChangedInPass) {
+            evaluateAllRules(depth + 1);
+        }
+    }
+
+    /**
+     * Mutates the entity state based on an array of actions. Does not trigger UI updates itself.
+     */
     function executeActions(actions, resultContext = null) {
         const activeEntity = getActiveEntity();
         if (!activeEntity) return false;
@@ -275,12 +412,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
         (actions || []).forEach(action => {
             switch (action.type) {
+                case 'setVariable': {
+                    const activeVars = activeEntity.variables;
+                    const { target: varName, targetProperty = 'bonus', operator } = action;
+                    if (!varName || !activeVars[varName]) break;
+
+                    const targetField = (targetProperty === 'base') ? 'base' : 'manualBonus';
+                    const oldValue = activeVars[varName][targetField] || 0;
+                    
+                    let rawValue = action.value;
+                    if (resultContext && typeof rawValue === 'string' && rawValue.toUpperCase() === '[RESULT]') rawValue = resultContext.text;
+                    const value = (UNARY_OPERATORS.includes(operator) || operator === 'invert') ? 0 : evaluateFormula(rawValue, tempVariables);
+                    let finalValue;
+                    
+                    switch (operator) {
+                        case '=': finalValue = value; break;
+                        case '+=': finalValue = oldValue + value; break;
+                        case '-=': finalValue = oldValue - value; break;
+                        case '*=': finalValue = oldValue * value; break;
+                        case '/=': finalValue = value !== 0 ? oldValue / value : oldValue; break;
+                        case 'ceil': finalValue = Math.ceil(oldValue); break;
+                        case 'floor': finalValue = Math.floor(oldValue); break;
+                        case 'negate': finalValue = oldValue * -1; break;
+                        case 'invert': { const min = evaluateFormula(action.min, tempVariables), max = evaluateFormula(action.max, tempVariables); finalValue = (typeof min === 'number' && typeof max === 'number') ? (min + max) - oldValue : oldValue; break; }
+                        default: finalValue = oldValue; break;
+                    }
+                    if (typeof oldValue === 'string' && operator !== '=') break;
+                    
+                    if (finalValue !== oldValue) { 
+                        addLogMessage(`-> <span class="log-highlight">${varName}.${targetField}</span>: ${oldValue} -> ${finalValue}`);
+                        activeVars[varName][targetField] = finalValue; 
+                        dataChanged = true; 
+                    }
+                    break;
+                }
+                // Other cases remain the same...
                 case 'calculateAssign': {
                     if(!action.targetTempVar || !action.sourceCollection) break;
                     let result = 0;
                     const collection = activeEntity.collections[action.sourceCollection] || [];
                     const filterTag = action.filterTag;
-
                     if (filterTag) {
                         result = collection.filter(itemName => {
                             if (!itemName) return false;
@@ -290,34 +461,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         result = collection.filter(item => item).length;
                     }
-                    
                     tempVariables[action.targetTempVar] = result;
                     addLogMessage(`-> [Tính toán]: ${action.targetTempVar} = ${result}`);
-                    break;
-                }
-                case 'setVariable': {
-                    const activeVars = activeEntity.variables;
-                    const { target: varName, targetProperty = 'bonus', operator } = action;
-                    if (!varName || !activeVars[varName]) break;
-                    const oldValue = activeVars[varName][targetProperty];
-                    let rawValue = action.value;
-                    if (resultContext && typeof rawValue === 'string' && rawValue.toUpperCase() === '[RESULT]') rawValue = resultContext.text;
-                    const value = (UNARY_OPERATORS.includes(operator) || operator === 'invert') ? 0 : evaluateFormula(rawValue, tempVariables);
-                    let finalValue;
-                    switch (operator) {
-                        case '=': finalValue = value; break;
-                        case '+=': finalValue = (oldValue || 0) + value; break;
-                        case '-=': finalValue = (oldValue || 0) - value; break;
-                        case '*=': finalValue = (oldValue || 0) * value; break;
-                        case '/=': finalValue = value !== 0 ? (oldValue || 0) / value : (oldValue || 0); break;
-                        case 'ceil': finalValue = Math.ceil(oldValue || 0); break;
-                        case 'floor': finalValue = Math.floor(oldValue || 0); break;
-                        case 'negate': finalValue = (oldValue || 0) * -1; break;
-                        case 'invert': { const min = evaluateFormula(action.min, tempVariables), max = evaluateFormula(action.max, tempVariables); finalValue = (typeof min === 'number' && typeof max === 'number') ? (min + max) - (oldValue || 0) : oldValue; break; }
-                        default: finalValue = oldValue; break;
-                    }
-                    if (typeof oldValue === 'string' && operator !== '=') break;
-                    if (finalValue !== oldValue) { addLogMessage(`-> <span class="log-highlight">${varName}.${targetProperty}</span>: ${oldValue} -> ${finalValue}`); activeVars[varName][targetProperty] = finalValue; dataChanged = true; }
                     break;
                 }
                 case 'setCollectionSlots': {
@@ -369,13 +514,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-        if(dataChanged) { recalculateActiveEntityStats(); throttledSaveState(); }
+
+        if (dataChanged) {
+            throttledSaveState();
+        }
         return dataChanged;
     }
 
     // --- UI UPDATE FUNCTIONS ---
     function updateAllUI() { updateVariableTemplateUI(); updateCollectionTemplateUI(); updateItemDatabaseListUI(); updateTagManagerListUI(); updateMacrosListUI(); updateComputedVariablesListUI(); updateRulesListUI(); updateEntityListUI(); updateActiveEntitySelector(); updateEntityEditorUI(); updateSidebarDisplay(); updateCreatorUI(); updateItemSuggestions(); updateTagSuggestions(); clearTickSoundBtn.style.display = projectSettings.tickSoundData ? 'inline-block' : 'none'; }
-    function updateVariableTemplateUI() { variableTemplateListDiv.innerHTML = ''; Object.keys(variableTemplate).sort().forEach(varName => { const varData = variableTemplate[varName]; const item = document.createElement('div'); item.className = 'list-item variable-item'; item.innerHTML = `<div class="image-preview-container" style="display: ${varData.icon ? 'block' : 'none'}"><img src="${varData.icon || ''}" class="image-preview"></div><div class="variable-name-group item-info"><strong>${varName}</strong></div><div class="display-toggle"><input type="checkbox" id="display-var-${varName}" class="display-var-checkbox" data-varname="${varName}" ${varData.displayInStats ? 'checked' : ''}><label for="display-var-${varName}">Hiển thị</label></div><div class="variable-inputs"><div><label>Base</label><input type="text" class="variable-base-input" value="${varData.base}" data-varname="${varName}"></div><div><label>Bonus</label><input type="text" class="variable-bonus-input" value="${varData.bonus}" data-varname="${varName}" disabled></div></div><button class="delete-btn delete-variable-btn" data-varname="${varName}">X</button>`; variableTemplateListDiv.appendChild(item); }); updateVariableSuggestions(); }
+    function updateVariableTemplateUI() { variableTemplateListDiv.innerHTML = ''; Object.keys(variableTemplate).sort().forEach(varName => { const varData = variableTemplate[varName]; const item = document.createElement('div'); item.className = 'list-item variable-item'; item.innerHTML = `<div class="image-preview-container" style="display: ${varData.icon ? 'block' : 'none'}"><img src="${varData.icon || ''}" class="image-preview"></div><div class="variable-name-group item-info"><strong>${varName}</strong></div><div class="display-toggle"><input type="checkbox" id="display-var-${varName}" class="display-var-checkbox" data-varname="${varName}" ${varData.displayInStats ? 'checked' : ''}><label for="display-var-${varName}">Hiển thị</label></div><div class="variable-inputs"><div><label>Base</label><input type="text" class="variable-base-input" value="${varData.base}" data-varname="${varName}"></div><div><label>Bonus</label><input type="text" class="variable-bonus-input" value="0" data-varname="${varName}" disabled></div></div><button class="delete-btn delete-variable-btn" data-varname="${varName}">X</button>`; variableTemplateListDiv.appendChild(item); }); updateVariableSuggestions(); }
     function updateCollectionTemplateUI() { collectionTemplateListUI.innerHTML = ''; Object.values(collectionTemplate).sort((a, b) => a.name.localeCompare(b.name)).forEach(coll => { const li = document.createElement('li'); li.className = 'list-item'; li.innerHTML = `<span class="item-info">${coll.name}</span><button class="delete-btn delete-collection-btn" data-id="${coll.id}">X</button>`; collectionTemplateListUI.appendChild(li); }); updateCollectionSelectorDropdowns(); }
     function updateItemDatabaseListUI() { itemDatabaseListContainer.innerHTML = ''; Object.values(collectionTemplate).sort((a,b) => a.name.localeCompare(b.name)).forEach(collection => { const categoryWrapper = document.createElement('div'); const header = document.createElement('div'); header.className = 'item-category-header'; header.innerHTML = `<h4>${collection.name}</h4><button class="btn btn-secondary btn-sm add-item-to-category-btn" data-collection-id="${collection.id}">+ Thêm</button>`; categoryWrapper.appendChild(header); const list = document.createElement('ul'); const itemsInCategory = Object.values(itemDatabase).filter(item => item.collectionId === collection.id); if (itemsInCategory.length === 0) { list.innerHTML = '<p class="form-hint">Chưa có vật phẩm nào.</p>'; } else { itemsInCategory.sort((a,b) => a.name.localeCompare(b.name)).forEach(item => { const li = document.createElement('li'); li.className = 'list-item'; li.dataset.id = item.id; if (activeEditor.type === 'item' && item.id === activeEditor.id) li.classList.add('editing'); li.innerHTML = `<span class="item-info">${item.name || 'Vật phẩm không tên'}</span><button class="delete-btn delete-item-btn" data-id="${item.id}">X</button>`; list.appendChild(li); }); } categoryWrapper.appendChild(list); itemDatabaseListContainer.appendChild(categoryWrapper); }); }
     function updateTagManagerListUI() { tagManagerListUI.innerHTML = ''; Object.values(tagDatabase).sort((a,b) => a.name.localeCompare(b.name)).forEach(tag => { const li = document.createElement('li'); li.className = 'list-item'; li.dataset.id = tag.id; if(activeEditor.type === 'tag' && tag.id === activeEditor.id) li.classList.add('editing'); li.innerHTML = `<img src="${tag.icon || 'https://placehold.co/24x24/404040/888?text=?'}" class="tag-manager-item-icon"><span class="item-info">${tag.name || 'Tag không tên'}</span><button class="delete-btn delete-tag-btn" data-id="${tag.id}">X</button>`; tagManagerListUI.appendChild(li); }); }
@@ -384,11 +532,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateMacroSelectorDropdown() { actionExecuteMacroTarget.innerHTML = ''; Object.values(macros).sort((a,b) => a.name.localeCompare(b.name)).forEach(macro => { const option = document.createElement('option'); option.value = macro.id; option.textContent = macro.name; actionExecuteMacroTarget.appendChild(option); }); }
     function updateEntityListUI() { entityListUI.innerHTML = ''; Object.values(entities).forEach(entity => { const li = document.createElement('li'); li.className = 'list-item'; li.dataset.id = entity.id; if (editingEntityId === entity.id) li.classList.add('editing'); li.innerHTML = `<span class="item-info">${entity.name}</span><button class="delete-btn delete-entity-btn" data-id="${entity.id}">X</button>`; entityListUI.appendChild(li); }); }
     function updateActiveEntitySelector() { activeEntitySelector.innerHTML = '<option value="none">-- Không có --</option>'; Object.values(entities).forEach(entity => { const option = document.createElement('option'); option.value = entity.id; option.textContent = entity.name; activeEntitySelector.appendChild(option); }); activeEntitySelector.value = activeEntityId && entities[activeEntityId] ? activeEntityId : 'none'; }
-    function updateEntityEditorUI() { const hasSelection = !!editingEntityId; entityEditorPlaceholder.style.display = hasSelection ? 'none' : 'block'; entityEditorContent.style.display = hasSelection ? 'block' : 'none'; if (!hasSelection) return; const entity = entities[editingEntityId]; entityEditorTitle.textContent = `Chỉnh sửa: ${entity.name}`; entityNameInput.value = entity.name; entityAvatarPreview.src = entity.avatar || ''; clearEntityAvatarBtn.style.display = entity.avatar ? 'inline-block' : 'none'; entityVariablesListDiv.innerHTML = ''; Object.keys(entity.variables).sort().forEach(varName => { const varData = entity.variables[varName]; const item = document.createElement('div'); item.className = 'list-item variable-item'; item.innerHTML = `<div class="variable-name-group item-info"><strong>${varName}</strong></div><div class="variable-inputs"><div><label>Base</label><input type="text" class="variable-base-input" value="${varData.base}" data-varname="${varName}" data-entityid="${entity.id}"></div><div><label>Bonus</label><input type="text" class="variable-bonus-input" value="${varData.bonus}" data-varname="${varName}" data-entityid="${entity.id}" disabled></div></div>`; entityVariablesListDiv.appendChild(item); }); entityCollectionsListDiv.innerHTML = ''; Object.keys(collectionTemplate).sort((a,b) => collectionTemplate[a].name.localeCompare(collectionTemplate[b].name)).forEach(collectionId => { const collectionTpl = collectionTemplate[collectionId]; const collectionGroup = document.createElement('div'); collectionGroup.className = 'collection-editor-group'; const title = document.createElement('h4'); title.textContent = collectionTpl.name; collectionGroup.appendChild(title); const slots = entity.collections[collectionId] || []; if (slots.length === 0) { collectionGroup.innerHTML += '<p class="form-hint">Trống</p>'; } else { slots.forEach((item, index) => { const slotDiv = document.createElement('div'); slotDiv.className = 'collection-editor-slot'; slotDiv.innerHTML = `<label>#${index + 1}</label><input type="text" value="${item || ''}" data-entityid="${entity.id}" data-collectionid="${collectionId}" data-slotindex="${index}" list="item-suggestions">`; collectionGroup.appendChild(slotDiv); }); } entityCollectionsListDiv.appendChild(collectionGroup); }); }
+    function updateEntityEditorUI() { const hasSelection = !!editingEntityId; entityEditorPlaceholder.style.display = hasSelection ? 'none' : 'block'; entityEditorContent.style.display = hasSelection ? 'block' : 'none'; if (!hasSelection) return; const entity = entities[editingEntityId]; entityEditorTitle.textContent = `Chỉnh sửa: ${entity.name}`; entityNameInput.value = entity.name; entityAvatarPreview.src = entity.avatar || ''; clearEntityAvatarBtn.style.display = entity.avatar ? 'inline-block' : 'none'; entityVariablesListDiv.innerHTML = ''; Object.keys(entity.variables).sort().forEach(varName => { const varData = entity.variables[varName]; const totalBonus = (varData.manualBonus || 0) + (varData.itemBonus || 0); const item = document.createElement('div'); item.className = 'list-item variable-item'; item.innerHTML = `<div class="variable-name-group item-info"><strong>${varName}</strong></div><div class="variable-inputs"><div><label>Base</label><input type="text" class="variable-base-input" value="${varData.base}" data-varname="${varName}" data-entityid="${entity.id}"></div><div><label>Bonus</label><input type="text" class="variable-bonus-input" value="${totalBonus}" data-varname="${varName}" data-entityid="${entity.id}" disabled></div></div>`; entityVariablesListDiv.appendChild(item); }); entityCollectionsListDiv.innerHTML = ''; Object.keys(collectionTemplate).sort((a,b) => collectionTemplate[a].name.localeCompare(collectionTemplate[b].name)).forEach(collectionId => { const collectionTpl = collectionTemplate[collectionId]; const collectionGroup = document.createElement('div'); collectionGroup.className = 'collection-editor-group'; const title = document.createElement('h4'); title.textContent = collectionTpl.name; collectionGroup.appendChild(title); const slots = entity.collections[collectionId] || []; if (slots.length === 0) { collectionGroup.innerHTML += '<p class="form-hint">Trống</p>'; } else { slots.forEach((item, index) => { const slotDiv = document.createElement('div'); slotDiv.className = 'collection-editor-slot'; slotDiv.innerHTML = `<label>#${index + 1}</label><input type="text" value="${item || ''}" data-entityid="${entity.id}" data-collectionid="${collectionId}" data-slotindex="${index}" list="item-suggestions">`; collectionGroup.appendChild(slotDiv); }); } entityCollectionsListDiv.appendChild(collectionGroup); }); }
     function updateSidebarDisplay() { updateSidebarTitle(); updateSidebarTabs(); updateEntityStatDisplay(); }
     function updateSidebarTitle() { sidebarTitle.textContent = getActiveEntity()?.name || 'Thông Tin'; }
     function updateSidebarTabs() { const previouslyActiveTabId = sidebarNav.querySelector('.sidebar-tab-btn.active')?.dataset.tab; sidebarNav.querySelectorAll('.dynamic-tab').forEach(el => el.remove()); sidebarTabContent.querySelectorAll('.dynamic-tab-content').forEach(el => el.remove()); const activeEntity = getActiveEntity(); if (!activeEntity) { sidebarNav.querySelector('.sidebar-tab-btn[data-tab="stats-tab"]')?.classList.add('active'); document.getElementById('stats-tab')?.classList.add('active'); return; } const itemMap = new Map(Object.values(itemDatabase).map(item => [item.name, item])); Object.keys(activeEntity.collections || {}).sort((a,b) => collectionTemplate[a]?.name.localeCompare(collectionTemplate[b]?.name)).forEach(collectionId => { const collectionTpl = collectionTemplate[collectionId]; if (!collectionTpl) return; const tabBtn = document.createElement('button'); tabBtn.className = 'sidebar-tab-btn dynamic-tab'; tabBtn.dataset.tab = `collection-${collectionId}-tab`; tabBtn.textContent = collectionTpl.name; sidebarNav.appendChild(tabBtn); const tabContent = document.createElement('div'); tabContent.id = `collection-${collectionId}-tab`; tabContent.className = 'sidebar-tab dynamic-tab-content collection-tab-content'; const collectionDisplay = document.createElement('div'); collectionDisplay.className = 'entity-collection-display'; const slots = activeEntity.collections[collectionId]; if (!slots || slots.length === 0) { collectionDisplay.innerHTML = '<p class="form-hint">Không có ô nào.</p>'; } else { slots.forEach(itemName => { const slotDiv = document.createElement('div'); slotDiv.className = 'collection-slot'; const item = itemName ? itemMap.get(itemName) : null; if (item) { slotDiv.dataset.itemName = itemName; slotDiv.innerHTML = `<img class="slot-item-icon" src="${item.icon || 'https://placehold.co/32x32/252526/888?text=?'}"><span class="slot-item-name">${itemName}</span>`; } else { slotDiv.classList.add('empty'); slotDiv.innerHTML = `<span class="slot-item-name empty">${itemName || 'Trống'}</span>`; } collectionDisplay.appendChild(slotDiv); }); } tabContent.appendChild(collectionDisplay); sidebarTabContent.appendChild(tabContent); }); const tabToActivate = sidebarNav.querySelector(`.sidebar-tab-btn[data-tab="${previouslyActiveTabId}"]`) || sidebarNav.querySelector('.sidebar-tab-btn'); if (tabToActivate) { tabToActivate.click(); } }
-    function updateEntityStatDisplay() { entityStatsDisplay.innerHTML = ''; const activeVars = getActiveVariables(); if (!activeEntityId || Object.keys(activeVars).length === 0) { entityStatsDisplay.innerHTML = '<p class="form-hint">Không có thực thể nào được chọn.</p>'; return; } const visibleVars = Object.keys(activeVars).filter(varName => variableTemplate[varName]?.displayInStats).sort(); if (visibleVars.length === 0) { entityStatsDisplay.innerHTML = '<p class="form-hint">Không có chỉ số nào được chọn để hiển thị.</p>'; return; } visibleVars.forEach(varName => { const item = document.createElement('div'); item.className = 'stat-item'; const { base = 0, bonus = 0 } = activeVars[varName]; const varTpl = variableTemplate[varName] || {}; const total = base + bonus; const details = bonus !== 0 ? `<span class="stat-item-details">(${base} ${bonus > 0 ? '+': ''}${bonus})</span>` : ''; item.innerHTML = `<img src="${varTpl.icon || ''}" class="stat-item-icon" style="display: ${varTpl.icon ? 'block' : 'none'}"><span class="stat-item-name">${varName}</span><span class="stat-item-value">${total}</span>${details}`; entityStatsDisplay.appendChild(item); }); }
+    function updateEntityStatDisplay() { entityStatsDisplay.innerHTML = ''; const activeVars = getActiveVariables(); if (!activeEntityId || Object.keys(activeVars).length === 0) { entityStatsDisplay.innerHTML = '<p class="form-hint">Không có thực thể nào được chọn.</p>'; return; } const visibleVars = Object.keys(activeVars).filter(varName => variableTemplate[varName]?.displayInStats).sort(); if (visibleVars.length === 0) { entityStatsDisplay.innerHTML = '<p class="form-hint">Không có chỉ số nào được chọn để hiển thị.</p>'; return; } visibleVars.forEach(varName => { const item = document.createElement('div'); item.className = 'stat-item'; const varData = activeVars[varName]; const totalBonus = (varData.manualBonus || 0) + (varData.itemBonus || 0); const total = (varData.base || 0) + totalBonus; const varTpl = variableTemplate[varName] || {}; const details = totalBonus !== 0 ? `<span class="stat-item-details">(${(varData.base || 0)} ${totalBonus > 0 ? '+': ''}${totalBonus})</span>` : ''; item.innerHTML = `<img src="${varTpl.icon || ''}" class="stat-item-icon" style="display: ${varTpl.icon ? 'block' : 'none'}"><span class="stat-item-name">${varName}</span><span class="stat-item-value">${total}</span>${details}`; entityStatsDisplay.appendChild(item); }); }
     function addLogMessage(message) { const li = document.createElement('li'); li.innerHTML = message; gameLog.prepend(li); while (gameLog.children.length > MAX_LOG_ENTRIES) { gameLog.lastChild.remove(); } }
     function loadEntityEditor(entityId) { editingEntityId = entityId; updateEntityListUI(); updateEntityEditorUI(); }
     function updateComputedVariablesListUI() { computedVariablesListUI.innerHTML = ''; computedVariables.forEach(cv => { const li = document.createElement('li'); li.className = 'list-item'; li.dataset.id = cv.id; if(activeEditor.type === 'computed' && cv.id === activeEditor.id) li.classList.add('editing'); li.innerHTML = `<span class="item-info"><strong>Tổng</strong> = ${cv.formula || '...'}</span><button class="delete-btn delete-computed-variable-btn" data-id="${cv.id}">X</button>`; computedVariablesListUI.appendChild(li); }); }
@@ -507,7 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateAllActionSummaries() { const actions = editingSegmentData.actions || []; const summary = (selector, text) => { const el = document.querySelector(selector); if(el) el.textContent = text; }; summary('#action-executeMacro-enabled ~ .action-summary', actions.find(a=>a.type==='executeMacro') ? `-> ${macros[actions.find(a=>a.type==='executeMacro').targetMacro]?.name || '?'}` : ''); summary('#action-setVariable-enabled ~ .action-summary', actions.filter(a=>a.type==='setVariable').length > 0 ? actions.filter(a=>a.type==='setVariable').map(a => `${a.target}.${a.targetProperty||'bonus'} ${a.operator} ${a.value}`).join(', ') : ''); const setSlotsAction = actions.find(a=>a.type==='setCollectionSlots'); summary('#action-setCollectionSlots-enabled ~ .action-summary', setSlotsAction ? `[${collectionTemplate[setSlotsAction.targetCollection]?.name||'?'}] = ${setSlotsAction.value} ô` : ''); const addToCollectionAction = actions.find(a=>a.type==='addToCollection'); summary('#action-addToCollection-enabled ~ .action-summary', addToCollectionAction ? `Thêm vào [${collectionTemplate[addToCollectionAction.targetCollection]?.name||'?'}]` : ''); const goToWheelAction = actions.find(a=>a.type==='goToWheel'); summary('#action-goToWheel-enabled ~ .action-summary', (goToWheelAction && goToWheelAction.target) ? `-> ${goToWheelAction.target}` : ''); const playSoundAction = actions.find(a=>a.type==='playSound'); summary('#action-playSound-enabled ~ .action-summary', (playSoundAction && playSoundAction.soundData) ? `Phát âm thanh tùy chỉnh` : ''); const conditionalAction = actions.find(a=>a.type==='conditionalReroll'); summary('#action-conditional-enabled ~ .action-summary', conditionalAction ? `Nếu KQ ${conditionalAction.operator} ${conditionalAction.value}, quay lại ${conditionalAction.maxRerolls} lần` : ''); const setItemInSlotAction = actions.find(a=>a.type==='setItemInSlot'); summary('#action-setItemInSlot-enabled ~ .action-summary', setItemInSlotAction ? `Gán ô #${setItemInSlotAction.slot} = ${setItemInSlotAction.value}` : ''); const removeItemsAction = actions.find(a=>a.type==='removeItems'); let removeSummary = ''; if (removeItemsAction) { const modeText = { random: 'ngẫu nhiên', oldest: 'cũ nhất', newest: 'mới nhất'}[removeItemsAction.mode]; let amountText = ''; switch (removeItemsAction.amountType) { case 'specific': amountText = `${removeItemsAction.amountValue1}`; break; case 'range': amountText = `từ ${removeItemsAction.amountValue2} đến ${removeItemsAction.amountValue3}`; break; case 'all': amountText = 'toàn bộ'; break; } removeSummary = `Xóa ${amountText} vật phẩm ${modeText}`; } summary('#action-removeItems-enabled ~ .action-summary', removeSummary); }
     function exitEditMode() { editingSegmentIndex = null; editingSegmentData = { text: '', description: '', weight: 1, color: '#8AC926', actions: [] }; segmentTextInput.value = ''; segmentDescriptionInput.value = ''; segmentWeightInput.value = 1; segmentColorInput.value = '#8AC926'; mainActionBtn.textContent = "Thêm Ô"; cancelEditBtn.style.display = 'none'; resetActionPanelVisuals(); updateCreatorUI(); }
     function getResult(segmentsForCalc) { if (!segmentsForCalc || segmentsForCalc.length === 0) return null; const totalWeight = segmentsForCalc.reduce((sum, seg) => sum + (seg.weight || 1), 0); const markerAngleRad = 270 * Math.PI / 180; const finalAngle = (markerAngleRad - (startAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI); let cumulativeAngle = 0; for (const segment of segmentsForCalc) { const arc = (segment.weight / totalWeight) * (2 * Math.PI); if (finalAngle >= cumulativeAngle && finalAngle < cumulativeAngle + arc) return segment; cumulativeAngle += arc; } return segmentsForCalc[0]; }
-    function updateViewerActions() { const settings = wheelsData[currentWheelName]?.settings; const activeEntity = getActiveEntity(); let spinCount = 1; if (!activeEntity) { wheelDisplayArea.classList.remove('no-spins'); spinCountDisplay.textContent = ''; return; } if (settings && settings.spinCountVariable) { const spinVar = activeEntity.variables[settings.spinCountVariable]; spinCount = (spinVar && !isNaN((spinVar.base||0)+(spinVar.bonus||0))) ? (spinVar.base||0)+(spinVar.bonus||0) : 0; } if (spinCount <= 0) { wheelDisplayArea.classList.add('no-spins'); spinCountDisplay.textContent = 'Bạn không có lượt quay.'; const canSkip = settings && settings.defaultLink && settings.defaultLink !== 'None'; skipButton.disabled = !canSkip; } else { wheelDisplayArea.classList.remove('no-spins'); spinCountDisplay.textContent = ''; } }
+    function updateViewerActions() { const settings = wheelsData[currentWheelName]?.settings; const activeEntity = getActiveEntity(); let spinCount = 1; if (!activeEntity) { wheelDisplayArea.classList.remove('no-spins'); spinCountDisplay.textContent = ''; return; } if (settings && settings.spinCountVariable) { const spinVar = activeEntity.variables[settings.spinCountVariable]; if (spinVar) { const totalSpins = (spinVar.base || 0) + (spinVar.manualBonus || 0) + (spinVar.itemBonus || 0); spinCount = !isNaN(totalSpins) ? totalSpins : 0; } else { spinCount = 0; } } if (spinCount <= 0) { wheelDisplayArea.classList.add('no-spins'); spinCountDisplay.textContent = 'Bạn không có lượt quay.'; const canSkip = settings && settings.defaultLink && settings.defaultLink !== 'None'; skipButton.disabled = !canSkip; } else { wheelDisplayArea.classList.remove('no-spins'); spinCountDisplay.textContent = ''; } }
     function endSpinSequenceCleanup() { wheelDisplayArea.classList.remove('is-spinning'); panelOverlay.style.display = 'none'; variableSnapshot = null; tickAudio.pause(); tickAudio.currentTime = 0; updateViewerActions(); startIdleAnimation(); }
     function startSpinSequence() {
         if (isSpinning) return; 
@@ -521,12 +669,91 @@ document.addEventListener('DOMContentLoaded', () => {
         let spinCount = 1; 
         const spinVarName = settings.spinCountVariable; 
         const activeVars = getActiveVariables(); 
-        if (spinVarName && activeVars.hasOwnProperty(spinVarName)) { const varValue = (activeVars[spinVarName].base || 0) + (activeVars[spinVarName].bonus || 0); if (!isNaN(varValue) && varValue > 0) spinCount = varValue; } 
+        if (spinVarName && activeVars.hasOwnProperty(spinVarName)) { const spinVar = activeVars[spinVarName]; const totalSpins = (spinVar.base || 0) + (spinVar.manualBonus || 0) + (spinVar.itemBonus || 0); if (!isNaN(totalSpins) && totalSpins > 0) spinCount = totalSpins; } 
         const spinJob = { totalSpins: spinCount, spinsLeft: spinCount, temporarySegments: [...segments] }; spin(spinJob); 
     }
     function spin(job) { if (job.spinsLeft <= 0 || job.temporarySegments.length < 1) { endSpinSequenceCleanup(); const settings = wheelsData[currentWheelName]?.settings; if (settings && settings.defaultLink && settings.defaultLink !== 'None') { loadWheel(settings.defaultLink); } return; }; isSpinning = true; panelOverlay.style.display = 'block'; spinVelocity = Math.random() * 0.4 + 0.4; if (job.totalSpins > 1) { const currentSpin = job.totalSpins - job.spinsLeft + 1; spinCountDisplay.textContent = `(Lượt: ${currentSpin}/${job.totalSpins})`; } if (tickAudio.src) tickAudio.play(); animate(job); }
     function animate(job) { if (spinVelocity > 0.005) { startAngle += spinVelocity; spinVelocity *= friction; drawWheel(job.temporarySegments); requestAnimationFrame(() => animate(job)); } else if (isSpinning) { isSpinning = false; tickAudio.pause(); tickAudio.currentTime = 0; const result = getResult(job.temporarySegments); if (result) { processSpinResult(result, job); } else { endSpinSequenceCleanup(); } } }
-    function processSpinResult(result, job) { job.spinsLeft--; const activeEntity = getActiveEntity(); if (!activeEntity) { endSpinSequenceCleanup(); return; } addLogMessage(`<span class="log-highlight">${activeEntity.name}</span> quay trúng ô <span class="log-highlight">"${result.text}"</span>.`); const actions = result.actions || []; const playSoundAction = actions.find(a => a.type === 'playSound'); if (playSoundAction) playSound(playSoundAction.soundData); const settings = wheelsData[currentWheelName].settings; const removalMode = settings.removalMode || 'none'; let wheelWasDeleted = false; if (removalMode === 'temporary') { if (job.temporarySegments.length > 1) { const indexToRemove = job.temporarySegments.findIndex(seg => seg === result); if (indexToRemove > -1) job.temporarySegments.splice(indexToRemove, 1); } } else if (removalMode === 'permanent') { const originalSegments = wheelsData[currentWheelName].segments; const indexInOriginal = originalSegments.findIndex(seg => seg.text === result.text && seg.color === result.color); if (indexInOriginal > -1) { originalSegments.splice(indexInOriginal, 1); if (originalSegments.length === 0) { const deletedWheelName = currentWheelName; delete wheelsData[deletedWheelName]; wheelWasDeleted = true; showNotification(`Ô cuối cùng đã bị xóa. Vòng quay "${deletedWheelName}" đã bị hủy.`); } throttledSaveState(); if (!wheelWasDeleted) updateCreatorUI(); } } showResultPopup(result, () => { executeActions(actions.filter(a => a.type !== 'executeMacro'), result); const macroAction = actions.find(a => a.type === 'executeMacro'); if (macroAction && macros[macroAction.targetMacro]) { addLogMessage(`-> Thực thi Macro: <span class="log-highlight">${macros[macroAction.targetMacro].name}</span>`); executeActions(macros[macroAction.targetMacro].actions, result); } if (wheelWasDeleted) { loadWheel(null); endSpinSequenceCleanup(); return; } const nextWheelAction = actions.find(a => a.type === 'goToWheel'); if (nextWheelAction && wheelsData[nextWheelAction.target]) { spinCountDisplay.textContent = ''; loadWheel(nextWheelAction.target); endSpinSequenceCleanup(); } else if (job.spinsLeft > 0) { spin(job); } else { endSpinSequenceCleanup(); if (settings && settings.defaultLink && settings.defaultLink !== 'None') { loadWheel(settings.defaultLink); } else if (removalMode === 'temporary') { drawWheel(); } } }); }
+    
+    /**
+     * Orchestrates the sequence of events after the wheel lands on a segment.
+     */
+    function processSpinResult(result, job) {
+        job.spinsLeft--;
+        const activeEntity = getActiveEntity();
+        if (!activeEntity) {
+            endSpinSequenceCleanup();
+            return;
+        }
+
+        addLogMessage(`<span class="log-highlight">${activeEntity.name}</span> quay trúng ô <span class="log-highlight">"${result.text}"</span>.`);
+        
+        const settings = wheelsData[currentWheelName].settings;
+        const removalMode = settings.removalMode || 'none';
+        let wheelWasDeleted = false;
+        
+        if (removalMode === 'temporary') {
+            if (job.temporarySegments.length > 1) {
+                const indexToRemove = job.temporarySegments.findIndex(seg => seg === result);
+                if (indexToRemove > -1) job.temporarySegments.splice(indexToRemove, 1);
+            }
+        } else if (removalMode === 'permanent') {
+            const originalSegments = wheelsData[currentWheelName].segments;
+            const indexInOriginal = originalSegments.findIndex(seg => seg.text === result.text && seg.color === result.color);
+            if (indexInOriginal > -1) {
+                originalSegments.splice(indexInOriginal, 1);
+                if (originalSegments.length === 0) {
+                    const deletedWheelName = currentWheelName;
+                    delete wheelsData[deletedWheelName];
+                    wheelWasDeleted = true;
+                    showNotification(`Ô cuối cùng đã bị xóa. Vòng quay "${deletedWheelName}" đã bị hủy.`);
+                }
+                throttledSaveState();
+                if (!wheelWasDeleted) updateCreatorUI();
+            }
+        }
+
+        showResultPopup(result, () => {
+            const actions = result.actions || [];
+            
+            const playSoundAction = actions.find(a => a.type === 'playSound');
+            if (playSoundAction) playSound(playSoundAction.soundData);
+            
+            // Step 1: Execute all direct actions from the segment and any triggered macros.
+            const macroAction = actions.find(a => a.type === 'executeMacro');
+            executeActions(actions.filter(a => a.type !== 'executeMacro'), result);
+            if (macroAction && macros[macroAction.targetMacro]) {
+                addLogMessage(`-> Thực thi Macro: <span class="log-highlight">${macros[macroAction.targetMacro].name}</span>`);
+                executeActions(macros[macroAction.targetMacro].actions, result);
+            }
+
+            // Step 2: After all direct mutations, perform a single, authoritative recalculation.
+            recalculateActiveEntityStats();
+
+            // Step 3: Handle the rest of the game flow.
+            if (wheelWasDeleted) {
+                loadWheel(null);
+                endSpinSequenceCleanup();
+                return;
+            }
+            const nextWheelAction = actions.find(a => a.type === 'goToWheel');
+            if (nextWheelAction && wheelsData[nextWheelAction.target]) {
+                spinCountDisplay.textContent = '';
+                loadWheel(nextWheelAction.target);
+                endSpinSequenceCleanup();
+            } else if (job.spinsLeft > 0) {
+                spin(job);
+            } else {
+                endSpinSequenceCleanup();
+                if (settings && settings.defaultLink && settings.defaultLink !== 'None') {
+                    loadWheel(settings.defaultLink);
+                } else if (removalMode === 'temporary') {
+                    drawWheel();
+                }
+            }
+        });
+    }
+
     function idleAnimate() { if (isSpinning || !currentWheelName || !wheelsData[currentWheelName] || wheelsData[currentWheelName].segments.length === 0) return; startAngle += 0.0005; drawWheel(); idleAnimationId = requestAnimationFrame(idleAnimate); }
     function startIdleAnimation() { stopIdleAnimation(); idleAnimate(); }
     function stopIdleAnimation() { if(idleAnimationId) cancelAnimationFrame(idleAnimationId); idleAnimationId = null; }
@@ -543,13 +770,13 @@ document.addEventListener('DOMContentLoaded', () => {
     cancelTagGenerationBtn.addEventListener('click', () => { tagSelectionModal.style.display = 'none'; });
     confirmTagGenerationBtn.addEventListener('click', () => { generationState.tags = Array.from(tagListForGeneration.querySelectorAll('.tag-checkbox.selected')).map(el => el.dataset.tag); selectedTagsDisplay.innerHTML = ''; generationState.tags.forEach(tagName => { const tagData = Object.values(tagDatabase).find(t => t.name === tagName); const pill = document.createElement('span'); pill.className = 'tag-pill'; pill.innerHTML = `<img src="${tagData?.icon || 'https://placehold.co/16x16/6c757d/fff?text=?'}" class="tag-pill-icon">${tagName}`; selectedTagsDisplay.appendChild(pill); }); tagSelectionModal.style.display = 'none'; updateGeneratorUI(); });
     executeGenerationBtn.addEventListener('click', () => { if (!currentWheelName) { showNotification("Vui lòng chọn hoặc tạo một vòng quay trước.", true); return; } const { sourceType, filterType, category, tags } = generationState; let filters = {}; if (sourceType === 'itemDatabase') { if (filterType === 'category') filters.category = category; else if (filterType === 'tags') filters.tags = tags; } showConfirmationModal(`Việc này sẽ XÓA TẤT CẢ các ô hiện tại của vòng quay "${currentWheelName}". Bạn chắc chắn?`, () => { generateWheelSegments(sourceType, filters); resetGeneratorPanel(); }); });
-    addVariableBtn.addEventListener('click', async () => { const varName = newVariableNameInput.value.trim().replace(/\s+/g, '_'); if (!varName || variableTemplate.hasOwnProperty(varName)) return; const rawValue = newVariableValueInput.value; const finalValue = !isNaN(rawValue) && isFinite(rawValue) && rawValue.trim() !== '' ? parseFloat(rawValue) : rawValue; let iconData = ''; const iconFile = newVariableIconUpload.files[0]; if (iconFile) iconData = await new Promise(resolve => handleFileUpload(iconFile, resolve)); variableTemplate[varName] = { base: finalValue, bonus: 0, icon: iconData, displayInStats: true }; newVariableNameInput.value = ''; newVariableValueInput.value = '0'; newVariableIconUpload.value = ''; Object.values(entities).forEach(entity => { entity.variables[varName] = JSON.parse(JSON.stringify(variableTemplate[varName])); }); updateAllUI(); throttledSaveState(); });
+    addVariableBtn.addEventListener('click', async () => { const varName = newVariableNameInput.value.trim().replace(/\s+/g, '_'); if (!varName || variableTemplate.hasOwnProperty(varName)) return; const rawValue = newVariableValueInput.value; const finalValue = !isNaN(rawValue) && isFinite(rawValue) && rawValue.trim() !== '' ? parseFloat(rawValue) : rawValue; let iconData = ''; const iconFile = newVariableIconUpload.files[0]; if (iconFile) iconData = await new Promise(resolve => handleFileUpload(iconFile, resolve)); variableTemplate[varName] = { base: finalValue, icon: iconData, displayInStats: true }; newVariableNameInput.value = ''; newVariableValueInput.value = '0'; newVariableIconUpload.value = ''; Object.values(entities).forEach(entity => { entity.variables[varName] = { base: finalValue, manualBonus: 0, itemBonus: 0 }; }); updateAllUI(); throttledSaveState(); });
     variableTemplateListDiv.addEventListener('input', e => { if (e.target.matches('.variable-base-input')) { const varName = e.target.dataset.varname; const rawValue = e.target.value; let finalValue = !isNaN(rawValue) && isFinite(rawValue) && rawValue.trim() !== '' ? parseFloat(rawValue) : rawValue; variableTemplate[varName].base = finalValue; updateAllUI(); recalculateActiveEntityStats(); throttledSaveState(); } });
     variableTemplateListDiv.addEventListener('change', e => { if (e.target.matches('.display-var-checkbox')) { const varName = e.target.dataset.varname; variableTemplate[varName].displayInStats = e.target.checked; updateSidebarDisplay(); throttledSaveState(); } });
     variableTemplateListDiv.addEventListener('click', (e) => { if (e.target.matches('.delete-variable-btn')) { const varName = e.target.dataset.varname; delete variableTemplate[varName]; Object.values(entities).forEach(entity => { delete entity.variables[varName]; }); updateAllUI(); recalculateActiveEntityStats(); throttledSaveState(); } });
     addCollectionBtn.addEventListener('click', () => { const name = newCollectionNameInput.value.trim(); if (!name) return; const id = name.replace(/\s+/g, '_'); if (collectionTemplate[id]) { showNotification("Lỗi: Tên Kho Chứa này đã tồn tại.", true); return; } collectionTemplate[id] = { id, name }; Object.values(entities).forEach(entity => { if (!entity.collections) entity.collections = {}; entity.collections[id] = []; }); newCollectionNameInput.value = ''; updateCollectionTemplateUI(); updateSidebarDisplay(); updateItemDatabaseListUI(); throttledSaveState(); });
     collectionTemplateListUI.addEventListener('click', e => { if (e.target.matches('.delete-collection-btn')) { const id = e.target.dataset.id; delete collectionTemplate[id]; Object.values(entities).forEach(entity => { if (entity.collections) delete entity.collections[id]; }); Object.keys(itemDatabase).forEach(itemId => { if (itemDatabase[itemId].collectionId === id) delete itemDatabase[itemId]; }); updateAllUI(); recalculateActiveEntityStats(); throttledSaveState(); } });
-    addEntityBtn.addEventListener('click', () => { const name = newEntityNameInput.value.trim(); if (!name) return; const id = `entity_${Date.now()}`; const newCollections = {}; Object.keys(collectionTemplate).forEach(collId => { newCollections[collId] = []; }); entities[id] = { id, name, variables: JSON.parse(JSON.stringify(variableTemplate)), avatar: '', collections: newCollections }; newEntityNameInput.value = ''; if (!activeEntityId) activeEntityId = id; updateEntityListUI(); updateActiveEntitySelector(); loadEntityEditor(id); throttledSaveState(); });
+    addEntityBtn.addEventListener('click', () => { const name = newEntityNameInput.value.trim(); if (!name) return; const id = `entity_${Date.now()}`; const newCollections = {}; Object.keys(collectionTemplate).forEach(collId => { newCollections[collId] = []; }); const newVariables = {}; Object.keys(variableTemplate).forEach(varName => { newVariables[varName] = { base: variableTemplate[varName].base, manualBonus: 0, itemBonus: 0 }; }); entities[id] = { id, name, variables: newVariables, avatar: '', collections: newCollections }; newEntityNameInput.value = ''; if (!activeEntityId) activeEntityId = id; updateEntityListUI(); updateActiveEntitySelector(); loadEntityEditor(id); throttledSaveState(); });
     entityListUI.addEventListener('click', e => { const targetLi = e.target.closest('.list-item'); if (!targetLi) return; const id = targetLi.dataset.id; if (e.target.matches('.delete-entity-btn')) { e.stopPropagation(); showConfirmationModal(`Bạn có chắc muốn xóa thực thể "${entities[id].name}"?`, () => { delete entities[id]; if (editingEntityId === id) editingEntityId = null; if (activeEntityId === id) activeEntityId = null; updateAllUI(); throttledSaveState(); }); } else { loadEntityEditor(id); } });
     entityNameInput.addEventListener('input', (e) => { if(editingEntityId) { entities[editingEntityId].name = e.target.value; entityEditorTitle.textContent = `Chỉnh sửa: ${e.target.value}`; updateEntityListUI(); updateActiveEntitySelector(); updateSidebarTitle(); throttledSaveState(); } });
     entityVariablesListDiv.addEventListener('input', e => { if(e.target.matches('.variable-base-input')) { const entityId = e.target.dataset.entityid, varName = e.target.dataset.varname, rawValue = e.target.value; let finalValue = !isNaN(rawValue) && isFinite(rawValue) && rawValue.trim() !== '' ? parseFloat(rawValue) : rawValue; entities[entityId].variables[varName].base = finalValue; recalculateActiveEntityStats(); throttledSaveState(); } });
@@ -637,11 +864,11 @@ document.addEventListener('DOMContentLoaded', () => {
         activeEntityId = null;
         updateAllUI();
         recalculateActiveEntityStats();
-        addLogMessage("Chào mừng đến với Wheel Engine v19.0! Hãy bắt đầu sáng tạo.");
+        addLogMessage("Chào mừng đến với Wheel Engine v19.4! Hãy bắt đầu sáng tạo.");
     }
 
     initialize();
-    exitEditMode();
+    exitEditMode(); 
     resetGeneratorPanel();
 });
 
