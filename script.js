@@ -63,6 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const backupListSelect = document.getElementById('backup-list-select');
     const restoreBackupBtn = document.getElementById('restore-backup-btn');
     const resetToDefaultStyleBtn = document.getElementById('reset-to-default-style-btn');
+    const openSettingsBtn = document.getElementById('open-settings-btn');
+    const closeSettingsModalBtn = document.getElementById('close-settings-modal');
+    const settingsModal = document.getElementById('settings-modal');
     const spinCountDisplay = document.getElementById('spin-count-display');
     const resetSpinBtn = document.getElementById('reset-spin-btn');
     const segmentActionPanel = document.getElementById('segment-action-panel');
@@ -154,6 +157,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveMacroAsTemplateBtn = document.getElementById('save-macro-as-template-btn');
     const saveRuleAsTemplateBtn = document.getElementById('save-rule-as-template-btn');
     const userSavedTemplatesGroup = document.getElementById('user-saved-templates-group');
+    const statusEditorContent = document.getElementById('status-editor-content');
+    const statusEditorTitle = document.getElementById('status-editor-title');
+    const statusNameInput = document.getElementById('status-name-input');
+    const statusDescriptionInput = document.getElementById('status-description-input');
+    const statusLogicOperator = document.getElementById('status-logic-operator');
+    const statusConditionsContainer = document.getElementById('status-conditions-container');
+    const addStatusConditionBtn = document.getElementById('add-status-condition-btn');
+    const statusActionsContainer = document.getElementById('status-actions-container');
+    const addStatusActionBtn = document.getElementById('add-status-action-btn');
+    const statusEndType = document.getElementById('status-end-type');
+    const statusSpinCountGroup = document.getElementById('status-spin-count-group');
+    const statusSpinCount = document.getElementById('status-spin-count');
+    const statusEndWheelGroup = document.getElementById('status-end-wheel-group');
+    const statusEndWheel = document.getElementById('status-end-wheel');
+    const statusExecutionTiming = document.getElementById('status-execution-timing');
+    const statusStackBehavior = document.getElementById('status-stack-behavior');
+    const statusListUI = document.getElementById('status-list');
+    const addStatusBtn = document.getElementById('add-status-btn');
     const entityListUI = document.getElementById('entity-list');
     const newEntityNameInput = document.getElementById('new-entity-name');
     const addEntityBtn = document.getElementById('add-entity-btn');
@@ -206,19 +227,50 @@ document.addEventListener('DOMContentLoaded', () => {
                 actionStatusTargetWheelRow.style.display = 'none';
             }
         });
-        // Set initial state
         if (actionStatusDurTypeSelect.value === 'wheel_end') {
             actionStatusTargetWheelRow.style.display = 'block';
         } else {
             actionStatusTargetWheelRow.style.display = 'none';
         }
     }
+    // Wire up applyStatus and removeStatus checkbox toggles
+    const actionApplyStatusCheckbox = document.getElementById('action-applyStatus-enabled');
+    const actionApplyStatusDetails = document.getElementById('action-applyStatus-details');
+    if (actionApplyStatusCheckbox && actionApplyStatusDetails) {
+        actionApplyStatusCheckbox.addEventListener('change', () => {
+            actionApplyStatusDetails.style.display = actionApplyStatusCheckbox.checked ? 'flex' : 'none';
+        });
+    }
+    const actionRemoveStatusCheckbox = document.getElementById('action-removeStatus-enabled');
+    const actionRemoveStatusDetails = document.getElementById('action-removeStatus-details');
+    if (actionRemoveStatusCheckbox && actionRemoveStatusDetails) {
+        actionRemoveStatusCheckbox.addEventListener('change', () => {
+            actionRemoveStatusDetails.style.display = actionRemoveStatusCheckbox.checked ? 'flex' : 'none';
+        });
+    }
+    // Wire up inline status effects add/remove
+    const segmentStatusEffectsContainer = document.getElementById('segment-status-effects-container');
+    const addSegmentStatusEffectBtn = document.getElementById('add-segment-status-effect-btn');
+    if (addSegmentStatusEffectBtn && segmentStatusEffectsContainer) {
+        addSegmentStatusEffectBtn.addEventListener('click', () => {
+            const row = document.createElement('div');
+            row.className = 'status-effect-row';
+            row.style.cssText = 'display:flex;gap:0.25rem;align-items:center;margin-bottom:0.25rem;';
+            row.innerHTML = `<select class="effect-target" style="flex:1;"><option value="">Chọn chỉ số</option>${Object.keys(variableTemplate).map(v => `<option value="${v}">${v}</option>`).join('')}</select><select class="effect-operator" style="width:60px;"><option value="min">min</option><option value="max">max</option><option value="override">=</option></select><input class="effect-value" type="text" placeholder="Value" style="flex:1;"><button type="button" class="btn-delete-effect" style="background:none;border:none;color:var(--danger);cursor:pointer;">X</button>`;
+            segmentStatusEffectsContainer.appendChild(row);
+        });
+        segmentStatusEffectsContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('btn-delete-effect')) {
+                e.target.closest('.status-effect-row').remove();
+            }
+        });
+    }
     const tagListForGeneration = document.getElementById('tag-list-for-generation');
     const confirmTagGenerationBtn = document.getElementById('confirm-tag-generation-btn');
     const cancelTagGenerationBtn = document.getElementById('cancel-tag-generation-btn');
 
     // Global State
-    let wheelsData = {}, variableTemplate = {}, collectionTemplate = {}, macros = {}, entities = {}, computedVariables = [], conditionalRules = [], projectSettings = {}, itemDatabase = {}, tagDatabase = {};
+    let wheelsData = {}, variableTemplate = {}, collectionTemplate = {}, macros = {}, statusTemplate = {}, entities = {}, computedVariables = [], conditionalRules = [], projectSettings = {}, itemDatabase = {}, tagDatabase = {};
     let activeEntityId = null, wheelStack = [];
     let editingEntityId = null;
     let currentWheelName = '', editingSegmentIndex = null;
@@ -690,6 +742,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             'highest_var', 'lowest_var', 
                             'highest_var_latest', 'lowest_var_latest', 
                             'highest_bs_var', 'lowest_bs_var', 
+                            'highest_bs_earliest', 'highest_bs_latest',
+                            'lowest_bs_earliest', 'lowest_bs_latest',
                             'earliest_var', 'latest_var'
                         ].includes(target)) {
                             const globals = calculateGlobalStats(entity);
@@ -794,7 +848,6 @@ function calculateGlobalStats(entity) {
 
         chronologicalKeys.forEach((key) => {
             const val = getVariableTotalValue(entity, key);
-            const bs = vars[key].base || 0;
 
             // Total stats - earliest tie break (strict comparison)
             if (val > highestVal) { highestVal = val; highestVar = key; }
@@ -803,6 +856,10 @@ function calculateGlobalStats(entity) {
             // Total stats - latest tie break (non-strict comparison)
             if (val >= highestValLatest) { highestValLatest = val; highestVarLatest = key; }
             if (val <= lowestValLatest) { lowestValLatest = val; lowestVarLatest = key; }
+        });
+
+        baseStatChronologicalKeys.forEach((key) => {
+            const bs = vars[key].base || 0;
 
             // Base stats - earliest tie break (strict comparison)
             if (bs > highestBsVal) { highestBsVal = bs; highestBsVar = key; }
@@ -1220,7 +1277,24 @@ function calculateGlobalStats(entity) {
                     break;
                 }
                 case 'applyStatus': {
-                    const { statusData } = action;
+                    let statusData;
+                    if (action._inline) {
+                        statusData = {
+                            id: `inline_status_${Date.now()}`,
+                            name: action.statusName,
+                            description: action.statusDescription || '',
+                            endType: action.endType || 'afterSpins',
+                            spinCount: action.spinCount || 3,
+                            endWheel: action.endWheel || '',
+                            effects: action.effects || [],
+                            conditions: [],
+                            actions: [],
+                            executionTiming: 'immediate',
+                            stackBehavior: 'stack'
+                        };
+                    } else {
+                        statusData = statusTemplate[action.targetStatus];
+                    }
                     if (activeEntity && statusData) {
                         applyStatus(activeEntityId, statusData);
                         dataChanged = true;
@@ -1228,13 +1302,17 @@ function calculateGlobalStats(entity) {
                     break;
                 }
                 case 'removeStatus': {
-                    const { statusName } = action;
-                    if (activeEntity.statuses) {
+                    const targetId = action.statusName || action.targetStatus;
+                    const statusTpl = statusTemplate[targetId];
+                    const removeName = statusTpl ? statusTpl.name : targetId;
+                    if (activeEntity.statuses && removeName) {
                         const initialLen = activeEntity.statuses.length;
-                        activeEntity.statuses = activeEntity.statuses.filter(s => s.name !== statusName);
+                        activeEntity.statuses = activeEntity.statuses.filter(s => s.name !== removeName);
                         if (activeEntity.statuses.length < initialLen) {
-                            addLogMessage(`-> Đã xóa trạng thái: <span class="log-highlight">${statusName}</span>.`);
+                            addLogMessage(`-> Đã xóa trạng thái: <span class="log-highlight">${removeName}</span>.`);
                             dataChanged = true;
+                        } else {
+                            addLogMessage(`-> Không tìm thấy trạng thái "${removeName}" để xóa.`);
                         }
                     }
                     break;
@@ -1302,9 +1380,21 @@ function calculateGlobalStats(entity) {
         itemDatabaseListContainer.innerHTML = '';
         const searchTerm = (itemSearchInput?.value || '').toLowerCase();
         
-        Object.values(collectionTemplate).sort((a,b) => a.name.localeCompare(b.name)).forEach(collection => {
+        const collections = Object.values(collectionTemplate).sort((a,b) => a.name.localeCompare(b.name));
+        const uncategorizedItems = Object.values(itemDatabase).filter(item => !item.collectionId || !collectionTemplate[item.collectionId]);
+        
+        if (collections.length === 0 || uncategorizedItems.length > 0) {
+            collections.push({ id: null, name: 'Chưa Phân Loại' });
+        }
+        
+        collections.forEach(collection => {
             const itemsInCategory = Object.values(itemDatabase).filter(item => {
-                if (item.collectionId !== collection.id) return false;
+                if (collection.id === null) {
+                    if (item.collectionId && collectionTemplate[item.collectionId]) return false;
+                } else {
+                    if (item.collectionId !== collection.id) return false;
+                }
+                
                 if (!searchTerm) return true;
                 const matchName = item.name.toLowerCase().includes(searchTerm);
                 const matchTag = item.tags && item.tags.some(tag => tag.toLowerCase().includes(searchTerm));
@@ -1316,7 +1406,13 @@ function calculateGlobalStats(entity) {
             const categoryWrapper = document.createElement('div');
             const header = document.createElement('div');
             header.className = 'item-category-header';
-            header.innerHTML = `<h4>${collection.name}</h4><button class="btn btn-secondary btn-sm add-item-to-category-btn" data-collection-id="${collection.id}">+ Thêm</button>`;
+            
+            if (collection.id) {
+                header.innerHTML = `<h4>${collection.name}</h4><button class="btn btn-secondary btn-sm add-item-to-category-btn" data-collection-id="${collection.id}">+ Thêm</button>`;
+            } else {
+                header.innerHTML = `<h4>${collection.name}</h4>`;
+            }
+            
             categoryWrapper.appendChild(header);
             const list = document.createElement('ul');
             
@@ -1353,8 +1449,10 @@ function calculateGlobalStats(entity) {
         });
     }
     function updateMacrosListUI() { macrosListUI.innerHTML = ''; Object.values(macros).sort((a,b) => a.name.localeCompare(b.name)).forEach(macro => { const li = document.createElement('li'); li.className = 'list-item'; li.dataset.id = macro.id; if(activeEditor.type === 'macro' && macro.id === activeEditor.id) li.classList.add('editing'); li.innerHTML = `<span class="item-info">${macro.name || 'Macro không tên'}</span><button class="delete-btn delete-macro-btn" data-id="${macro.id}">X</button>`; macrosListUI.appendChild(li); }); updateMacroSelectorDropdown(); }
+    function updateStatusListUI() { statusListUI.innerHTML = ''; Object.values(statusTemplate).sort((a,b) => a.name.localeCompare(b.name)).forEach(status => { const li = document.createElement('li'); li.className = 'list-item'; li.dataset.id = status.id; if(activeEditor.type === 'status' && status.id === activeEditor.id) li.classList.add('editing'); li.innerHTML = `<span class="item-info">${status.name || 'Trạng thái không tên'}</span><button class="delete-btn delete-status-btn" data-id="${status.id}">X</button>`; statusListUI.appendChild(li); }); updateStatusSelectorDropdown(); }
     function updateCollectionSelectorDropdowns() { const optionsHTML = Object.values(collectionTemplate).sort((a, b) => a.name.localeCompare(b.name)).map(coll => `<option value="${coll.id}">${coll.name}</option>`).join(''); actionSetCollectionSlotsTarget.innerHTML = optionsHTML; actionAddToCollectionTarget.innerHTML = optionsHTML; actionSetItemInSlotTarget.innerHTML = optionsHTML; actionRemoveItemsTarget.innerHTML = optionsHTML; itemCategorySelect.innerHTML = optionsHTML; categoryFilterSelect.innerHTML = `<option value="">-- Chọn Danh Mục --</option>${optionsHTML}`; }
     function updateMacroSelectorDropdown() { actionExecuteMacroTarget.innerHTML = ''; Object.values(macros).sort((a,b) => a.name.localeCompare(b.name)).forEach(macro => { const option = document.createElement('option'); option.value = macro.id; option.textContent = macro.name; actionExecuteMacroTarget.appendChild(option); }); }
+    function updateStatusSelectorDropdown() { actionApplyStatusTarget.innerHTML = ''; Object.values(statusTemplate).sort((a,b) => a.name.localeCompare(b.name)).forEach(status => { const option = document.createElement('option'); option.value = status.id; option.textContent = status.name; actionApplyStatusTarget.appendChild(option); }); }
     function updateEntityListUI() {
         entityListUI.innerHTML = '';
         const searchTerm = (entitySearchInput?.value || '').toLowerCase();
@@ -1459,13 +1557,13 @@ function calculateGlobalStats(entity) {
                 item.style.marginBottom = '0.5rem';
                 item.style.fontSize = '0.85rem';
                 
-                const durationType = status.duration_type || status.type || 'turn_count';
-                const remaining = status.remaining_duration !== undefined ? status.remaining_duration : (status.remaining !== undefined ? status.remaining : 0);
-                const targetWheel = status.end_wheel_id || status.targetWheel || '';
+                const durationType = status.endType || status.duration_type || status.type || 'afterSpins';
+                const remaining = status.spinCount !== undefined ? status.spinCount : (status.remaining_duration !== undefined ? status.remaining_duration : (status.remaining !== undefined ? status.remaining : 0));
+                const targetWheel = status.endWheel || status.end_wheel_id || status.targetWheel || '';
 
                 let durationText = '';
-                if (durationType === 'turn_count') durationText = `${remaining} lượt`;
-                else if (durationType === 'wheel_end') durationText = `Hết tại: ${targetWheel}`;
+                if (durationType === 'afterSpins' || durationType === 'turn_count') durationText = `${remaining} lượt`;
+                else if (durationType === 'afterWheel' || durationType === 'wheel_end') durationText = `Hết tại: ${targetWheel || 'VQ hiện tại'}`;
 
                 item.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
@@ -1623,11 +1721,11 @@ function calculateGlobalStats(entity) {
         
         dynamicStyle.textContent = `
             :root {
+                --accent-color: ${accent} !important;
                 --primary-yellow: ${accent} !important;
                 --bg-color: ${bg} !important;
-                --bg-primary: ${bg} !important;
-                --bg-secondary: ${bgSecondary} !important;
-                --bg-tertiary: ${bgTertiary} !important;
+                --surface-bg: ${bg}B3 !important;
+                --glass-bg: ${bg}BF !important;
                 --accent-glow: 0 0 20px ${accent}4d !important;
                 --premium-gradient: linear-gradient(135deg, ${accent} 0%, #d4af37 100%) !important;
             }
@@ -1663,6 +1761,7 @@ function calculateGlobalStats(entity) {
         computedVariableEditorContent.style.display = 'none'; 
         ruleEditorContent.style.display = 'none'; 
         macroEditorContent.style.display = 'none'; 
+        statusEditorContent.style.display = 'none'; 
         itemEditor.style.display = 'grid'; 
         itemEditorPlaceholder.style.display = 'block'; 
         itemEditorContent.style.display = 'none'; 
@@ -1692,6 +1791,25 @@ function calculateGlobalStats(entity) {
             (macro.actions || []).forEach(act => macroActionsContainer.appendChild(createMacroActionRow(act))); 
             logicEditorPlaceholder.style.display = 'none'; 
             macroEditorContent.style.display = 'block'; 
+        } else if (type === 'status') {
+            const status = statusTemplate[id];
+            if (!status) return;
+            statusNameInput.value = status.name || '';
+            statusDescriptionInput.value = status.description || '';
+            statusLogicOperator.value = status.logicOperator || 'AND';
+            statusConditionsContainer.innerHTML = '';
+            (status.conditions || []).forEach(cond => statusConditionsContainer.appendChild(createRuleConditionRow(cond)));
+            statusActionsContainer.innerHTML = '';
+            (status.actions || []).forEach(act => statusActionsContainer.appendChild(createMacroActionRow(act)));
+            statusEndType.value = status.endType || 'afterSpins';
+            statusSpinCount.value = status.spinCount || 3;
+            statusEndWheel.value = status.endWheel || '';
+            statusEndWheelGroup.style.display = status.endType === 'afterWheel' ? 'block' : 'none';
+            statusSpinCountGroup.style.display = status.endType === 'afterSpins' ? 'block' : 'none';
+            statusExecutionTiming.value = status.executionTiming || 'immediate';
+            statusStackBehavior.value = status.stackBehavior || 'stack';
+            logicEditorPlaceholder.style.display = 'none';
+            statusEditorContent.style.display = 'block';
         } else if (type === 'item') { 
             const item = itemDatabase[id]; 
             if(!item) return; 
@@ -1721,9 +1839,68 @@ function calculateGlobalStats(entity) {
         updateComputedVariablesListUI(); 
         updateRulesListUI(); 
         updateMacrosListUI(); 
+        updateStatusListUI();
         updateItemDatabaseListUI(); 
         updateTagManagerListUI(); 
     }
+    function extractActionFromRow(row) {
+        const actionType = row.querySelector('.action-type-selector').value;
+        const fields = row.querySelector(`.${actionType}-fields`);
+        if(!fields) return null;
+        let actionData = { type: actionType };
+        if (actionType === 'calculateAssign') {
+            actionData.targetTempVar = fields.querySelector('.action-calc-target').value.trim();
+            actionData.sourceCollection = fields.querySelector('.action-calc-source').value;
+            actionData.filterTag = fields.querySelector('.action-calc-tag-filter').value.trim();
+            if (actionData.targetTempVar && actionData.sourceCollection) return actionData;
+        } else if (actionType === 'setVariable') {
+            actionData.target = fields.querySelector('.action-var-name').value.trim().replace(/\s+/g, '_');
+            actionData.targetProperty = fields.querySelector('.action-var-target-prop').value;
+            actionData.operator = fields.querySelector('.action-var-operator').value;
+            if (actionData.operator === 'invert') {
+                actionData.min = fields.querySelector('.action-var-min').value.trim();
+                actionData.max = fields.querySelector('.action-var-max').value.trim();
+            } else if (!UNARY_OPERATORS.includes(actionData.operator)) {
+                actionData.value = fields.querySelector('.action-var-value').value.trim();
+            }
+            if(actionData.target) return actionData;
+        } else if (actionType === 'setItemInSlot') {
+            actionData.targetCollection = fields.querySelector('.action-collection-target').value;
+            actionData.slot = fields.querySelector('.action-slot-value').value.trim();
+            actionData.value = fields.querySelector('.action-item-value').value.trim();
+            if(actionData.targetCollection && actionData.slot && actionData.value) return actionData;
+        } else if (actionType === 'removeItems') {
+            Object.assign(actionData, { targetCollection: fields.querySelector('.action-collection-target').value, mode: fields.querySelector('.action-remove-mode').value, amountType: fields.querySelector('.action-remove-amount-type').value, amountValue1: fields.querySelector('.action-remove-amount-v1').value, amountValue2: fields.querySelector('.action-remove-amount-v2').value, amountValue3: fields.querySelector('.action-remove-amount-v3').value, });
+            if (actionData.targetCollection) return actionData;
+        } else if (actionType === 'setRandomVariables') {
+            actionData.amount = fields.querySelector('.action-randvar-amount').value.trim();
+            actionData.filter = fields.querySelector('.action-randvar-filter').value;
+            actionData.targetProperty = fields.querySelector('.action-randvar-target-prop').value;
+            actionData.value = fields.querySelector('.action-randvar-value').value.trim();
+            if(actionData.amount && actionData.value) return actionData;
+        } else if (actionType === 'addToCollection') {
+            actionData.targetCollection = fields.querySelector('.action-collection-target').value;
+            actionData.value = fields.querySelector('.action-collection-value').value.trim();
+            if(actionData.targetCollection && actionData.value) return actionData;
+        } else if (actionType === 'applyStatus') {
+            actionData.targetStatus = fields.querySelector('.action-status-select').value;
+            if(actionData.targetStatus) return actionData;
+        } else if (actionType === 'removeStatus') {
+            actionData.statusName = fields.querySelector('.action-status-remove-name').value.trim();
+            if(actionData.statusName) return actionData;
+        } else if (actionType === 'jumpToWheel') {
+            actionData.targetWheelId = fields.querySelector('.action-jump-target-select').value;
+            if (actionData.targetWheelId) return actionData;
+        } else if (actionType === 'goToWheel') {
+            actionData.target = fields.querySelector('.action-goto-target-select').value;
+            if (actionData.target) return actionData;
+        } else if (actionType === 'executeMacro') {
+            actionData.targetMacro = fields.querySelector('.action-execute-macro-select').value;
+            if (actionData.targetMacro) return actionData;
+        }
+        return null;
+    }
+
     function saveActiveEditor() {
         if (!activeEditor.id) return;
         switch(activeEditor.type) {
@@ -1757,15 +1934,9 @@ function calculateGlobalStats(entity) {
                                 }
                             });
                         }
-                        wrapper.querySelectorAll('.set-variable-action-row').forEach(row => {
-                            const actionData = { type: 'setVariable', target: row.querySelector('.action-var-name').value.trim().replace(/\s+/g, '_'), targetProperty: row.querySelector('.action-var-target-prop').value, operator: row.querySelector('.action-var-operator').value };
-                            if (actionData.operator === 'invert') {
-                                actionData.min = row.querySelector('.action-var-min').value.trim();
-                                actionData.max = row.querySelector('.action-var-max').value.trim();
-                            } else if (!UNARY_OPERATORS.includes(actionData.operator)) {
-                                actionData.value = row.querySelector('.action-var-value').value.trim();
-                            }
-                            if (actionData.target) blockData.actions.push(actionData);
+                        wrapper.querySelectorAll('.macro-action-row').forEach(row => {
+                            const actionData = extractActionFromRow(row);
+                            if (actionData) blockData.actions.push(actionData);
                         });
                         rule.blocks.push(blockData);
                     });
@@ -1780,78 +1951,39 @@ function calculateGlobalStats(entity) {
                     macro.name = macroNameInput.value.trim();
                     macro.actions = [];
                     macroActionsContainer.querySelectorAll('.macro-action-row').forEach(row => {
-                        const actionType = row.querySelector('.action-type-selector').value;
-                        const fields = row.querySelector(`.${actionType}-fields`);
-                        if(!fields) return;
-                        let actionData = { type: actionType };
-                        if (actionType === 'calculateAssign') {
-                            actionData.targetTempVar = fields.querySelector('.action-calc-target').value.trim();
-                            actionData.sourceCollection = fields.querySelector('.action-calc-source').value;
-                            actionData.filterTag = fields.querySelector('.action-calc-tag-filter').value.trim();
-                            if (actionData.targetTempVar && actionData.sourceCollection) macro.actions.push(actionData);
-                        } else if (actionType === 'setVariable') {
-                            actionData.target = fields.querySelector('.action-var-name').value.trim().replace(/\s+/g, '_');
-                            actionData.targetProperty = fields.querySelector('.action-var-target-prop').value;
-                            actionData.operator = fields.querySelector('.action-var-operator').value;
-                            if (actionData.operator === 'invert') {
-                                actionData.min = fields.querySelector('.action-var-min').value.trim();
-                                actionData.max = fields.querySelector('.action-var-max').value.trim();
-                            } else if (!UNARY_OPERATORS.includes(actionData.operator)) {
-                                actionData.value = fields.querySelector('.action-var-value').value.trim();
-                            }
-                            if(actionData.target) macro.actions.push(actionData);
-                        } else if (actionType === 'setItemInSlot') {
-                            actionData.targetCollection = fields.querySelector('.action-collection-target').value;
-                            actionData.slot = fields.querySelector('.action-slot-value').value.trim();
-                            actionData.value = fields.querySelector('.action-item-value').value.trim();
-                            if(actionData.targetCollection && actionData.slot && actionData.value) macro.actions.push(actionData);
-                        } else if (actionType === 'removeItems') {
-                            Object.assign(actionData, { targetCollection: fields.querySelector('.action-collection-target').value, mode: fields.querySelector('.action-remove-mode').value, amountType: fields.querySelector('.action-remove-amount-type').value, amountValue1: fields.querySelector('.action-remove-amount-v1').value, amountValue2: fields.querySelector('.action-remove-amount-v2').value, amountValue3: fields.querySelector('.action-remove-amount-v3').value, });
-                            if (actionData.targetCollection) macro.actions.push(actionData);
-                        } else if (actionType === 'setRandomVariables') {
-                            actionData.amount = fields.querySelector('.action-randvar-amount').value.trim();
-                            actionData.filter = fields.querySelector('.action-randvar-filter').value;
-                            actionData.targetProperty = fields.querySelector('.action-randvar-target-prop').value;
-                            actionData.value = fields.querySelector('.action-randvar-value').value.trim();
-                            if(actionData.amount && actionData.value) macro.actions.push(actionData);
-                        } else if (actionType === 'addToCollection') {
-                            actionData.targetCollection = fields.querySelector('.action-collection-target').value;
-                            actionData.value = fields.querySelector('.action-collection-value').value.trim();
-                            if(actionData.targetCollection && actionData.value) macro.actions.push(actionData);
-                        } else if (actionType === 'applyStatus') {
-                            const name = fields.querySelector('.action-status-name').value.trim();
-                            const description = fields.querySelector('.action-status-desc').value.trim();
-                            const type = fields.querySelector('.action-status-dur-type').value;
-                            const durVal = fields.querySelector('.action-status-dur-val').value.trim();
-                            
-                            const effects = [];
-                            fields.querySelectorAll('.status-effect-row').forEach(row => {
-                                const target = row.querySelector('.status-effect-target').value;
-                                const operator = row.querySelector('.status-effect-operator').value;
-                                const value = row.querySelector('.status-effect-value').value.trim();
-                                if (target) {
-                                    effects.push({ target, operator, value });
-                                }
-                            });
-                            
-                            actionData.statusData = {
-                                name,
-                                description,
-                                type,
-                                remaining: type === 'turn_count' ? durVal : 1,
-                                targetWheel: type === 'wheel_end' ? durVal : '',
-                                effects
-          };
-                            if(name) macro.actions.push(actionData);
-                        } else if (actionType === 'removeStatus') {
-                            actionData.statusName = fields.querySelector('.action-status-remove-name').value.trim();
-                            if(actionData.statusName) macro.actions.push(actionData);
-                        } else if (actionType === 'jumpToWheel') {
-                            actionData.targetWheelId = fields.querySelector('.action-jump-target-select').value;
-                            if (actionData.targetWheelId) macro.actions.push(actionData);
-                        }
+                        const actionData = extractActionFromRow(row);
+                        if (actionData) macro.actions.push(actionData);
                     });
                     updateMacrosListUI();
+                }
+                break;
+            }
+            case 'status': {
+                const status = statusTemplate[activeEditor.id];
+                if (status) {
+                    status.name = statusNameInput.value.trim();
+                    status.description = statusDescriptionInput.value.trim();
+                    status.logicOperator = statusLogicOperator.value;
+                    status.conditions = [];
+                    statusConditionsContainer.querySelectorAll('.rule-condition-row').forEach(row => {
+                        const conditionType = row.querySelector('.rule-condition-type').value;
+                        if (conditionType === 'variableCompare') {
+                            status.conditions.push({ type: 'variableCompare', left: row.querySelector('.variable-compare-left').value, operator: row.querySelector('.variable-compare-operator').value, right: row.querySelector('.variable-compare-right').value });
+                        } else if (conditionType === 'hasItems') {
+                            status.conditions.push({ type: 'hasItems', collectionId: row.querySelector('.item-check-collection').value, items: Array.from(row.querySelectorAll('.item-checklist-row input')).map(i => i.value.trim()).filter(Boolean) });
+                        }
+                    });
+                    status.actions = [];
+                    statusActionsContainer.querySelectorAll('.macro-action-row').forEach(row => {
+                        const actionData = extractActionFromRow(row);
+                        if (actionData) status.actions.push(actionData);
+                    });
+                    status.endType = statusEndType.value;
+                    status.spinCount = parseInt(statusSpinCount.value, 10) || 1;
+                    status.endWheel = statusEndWheel.value;
+                    status.executionTiming = statusExecutionTiming.value;
+                    status.stackBehavior = statusStackBehavior.value;
+                    updateStatusListUI();
                 }
                 break;
             }
@@ -1930,12 +2062,23 @@ function calculateGlobalStats(entity) {
         blockDiv.appendChild(actionsTitle); 
         const actionsContainer = document.createElement('div'); 
         actionsContainer.className = 'rule-actions-container'; 
-        (block.actions || []).forEach(action => actionsContainer.appendChild(createSetVariableActionRow(action))); 
+        (block.actions || []).forEach(action => actionsContainer.appendChild(createMacroActionRow(action))); 
         blockDiv.appendChild(actionsContainer); 
         const addActionButton = document.createElement('button'); 
         addActionButton.className = "btn btn-secondary btn-sm add-rule-action-btn"; 
         addActionButton.textContent = "+ Thêm hành động"; 
-        blockDiv.appendChild(addActionButton); 
+        
+        const saveTemplateBtn = document.createElement('button');
+        saveTemplateBtn.className = "btn btn-secondary btn-sm save-rule-template-btn";
+        saveTemplateBtn.style.marginLeft = "10px";
+        saveTemplateBtn.textContent = "Lưu thành Template";
+        
+        const btnRow = document.createElement('div');
+        btnRow.style.marginTop = "10px";
+        btnRow.appendChild(addActionButton);
+        btnRow.appendChild(saveTemplateBtn);
+        
+        blockDiv.appendChild(btnRow); 
         wrapper.appendChild(blockDiv); 
         return wrapper; 
     }
@@ -1995,6 +2138,7 @@ function calculateGlobalStats(entity) {
         const row = document.createElement('div');
         row.className = 'macro-action-row';
         const collectionOptions = Object.values(collectionTemplate).map(c => `<option value="${c.id}" ${action.targetCollection === c.id ? 'selected' : ''}>${c.name}</option>`).join('');
+        const statusOptions = Object.values(statusTemplate).map(s => `<option value="${s.id}" ${action.targetStatus === s.id ? 'selected' : ''}>${s.name}</option>`).join('');
         const wheelNames = Object.keys(wheelsData);
         const wheelOptionsStr = wheelNames.map(name => `<option value="${name}">${name}</option>`).join('');
         row.innerHTML = `
@@ -2048,20 +2192,10 @@ function calculateGlobalStats(entity) {
                      </div>
                 </div>
                 <div class="applyStatus-fields">
-                    <div class="form-row">
-                        <div class="form-group"><label>Tên trạng thái</label><input type="text" class="action-status-name" placeholder="Cursed" value=""></div>
-                        <div class="form-group"><label>Mô tả</label><input type="text" class="action-status-desc" placeholder="Chỉ số cao nhất là 4" value=""></div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group"><label>Loại thời gian</label><select class="action-status-dur-type"><option value="turn_count">Số lượt</option><option value="wheel_end">Hết khi đổi vòng quay</option></select></div>
-                        <div class="form-group"><label>Giá trị thời gian</label><input type="text" class="action-status-dur-val" placeholder="3, Vòng_Quay_Khác" value=""></div>
-                    </div>
-                    <label style="margin-top: 0.5rem; display: block; font-weight: bold;">Hiệu ứng chỉ số:</label>
-                    <div class="status-effects-container" style="margin-bottom: 0.5rem;"></div>
-                    <button class="btn btn-secondary btn-sm add-status-effect-btn" type="button">+ Thêm hiệu ứng</button>
+                    <div class="form-group"><label>Trạng Thái</label><select class="action-status-select action-apply-status-target">${statusOptions}</select></div>
                 </div>
                 <div class="removeStatus-fields">
-                    <div class="form-group"><label>Tên trạng thái cần xóa</label><input type="text" class="action-status-remove-name" placeholder="Cursed" value=""></div>
+                    <div class="form-group"><label>Trạng thái cần xóa</label><select class="action-status-remove-select">${statusOptions}</select></div>
                 </div>
                 <div class="jumpToWheel-fields">
                     <div class="form-group">
@@ -2098,11 +2232,6 @@ function calculateGlobalStats(entity) {
             if (action.type === 'removeItems') toggleRemoveAmountInputs();
         }
 
-        row.querySelector('.add-status-effect-btn').addEventListener('click', () => {
-            row.querySelector('.status-effects-container').appendChild(createStatusEffectRow());
-            saveActiveEditor();
-        });
-
         if(action.type) {
             typeSelector.value = action.type;
             const fields = row.querySelector(`.${action.type}-fields`);
@@ -2114,19 +2243,9 @@ function calculateGlobalStats(entity) {
                 } else if (action.type === 'setItemInSlot') { fields.querySelector('.action-collection-target').value = action.targetCollection || ''; fields.querySelector('.action-slot-value').value = action.slot || ''; fields.querySelector('.action-item-value').value = action.value || '';
                 } else if (action.type === 'removeItems') { fields.querySelector('.action-collection-target').value = action.targetCollection || ''; fields.querySelector('.action-remove-mode').value = action.mode || 'random'; fields.querySelector('.action-remove-amount-type').value = action.amountType || 'specific'; fields.querySelector('.action-remove-amount-v1').value = action.amountValue1 || ''; fields.querySelector('.action-remove-amount-v2').value = action.amountValue2 || ''; fields.querySelector('.action-remove-amount-v3').value = action.amountValue3 || ''; removeAmountTypeSelect.dispatchEvent(new Event('change'));
                 } else if (action.type === 'applyStatus') {
-                    const status = action.statusData || {};
-                    fields.querySelector('.action-status-name').value = status.name || '';
-                    fields.querySelector('.action-status-desc').value = status.description || '';
-                    fields.querySelector('.action-status-dur-type').value = status.type || 'turn_count';
-                    fields.querySelector('.action-status-dur-val').value = status.type === 'turn_count' ? (status.remaining !== undefined ? status.remaining : 1) : (status.targetWheel || '');
-                    
-                    const container = fields.querySelector('.status-effects-container');
-                    container.innerHTML = '';
-                    (status.effects || []).forEach(eff => {
-                        container.appendChild(createStatusEffectRow(eff));
-                    });
+                    fields.querySelector('.action-apply-status-target').value = action.targetStatus || '';
                 } else if (action.type === 'removeStatus') {
-                    fields.querySelector('.action-status-remove-name').value = action.statusName || '';
+                    fields.querySelector('.action-status-remove-select').value = action.statusName || action.targetStatus || '';
                 } else if (action.type === 'jumpToWheel') {
                     fields.querySelector('.action-jump-target-select').value = action.targetWheelId || 'lowest_bs_source';
                 }
@@ -2245,11 +2364,7 @@ function calculateGlobalStats(entity) {
                 emptyStateEl = document.createElement('div');
                 emptyStateEl.id = 'wheel-empty-state';
                 emptyStateEl.className = 'empty-state-card';
-                emptyStateEl.innerHTML = `
-                    <div class="empty-state-icon">🎡</div>
-                    <div class="empty-state-title">Chưa Chọn Vòng Quay</div>
-                    <div class="empty-state-description">Hãy chọn một vòng quay sẵn có từ danh sách bên phải hoặc tạo một vòng quay mới để bắt đầu thiết kế các sự kiện!</div>
-                `;
+                emptyStateEl.innerHTML = ``;
                 const displayArea = document.querySelector('.wheel-display-area');
                 if (displayArea) displayArea.appendChild(emptyStateEl);
             } else {
@@ -2330,8 +2445,9 @@ function calculateGlobalStats(entity) {
                  if (activeEntity && activeEntity.statuses) {
                      let statusExpired = false;
                      activeEntity.statuses = activeEntity.statuses.filter(status => {
-                         if (status.type === 'wheel_end') {
-                             if (!status.targetWheel || status.targetWheel.trim() === '') {
+                         if (status.endType === 'afterWheel') {
+                             const target = status.endWheel || status.targetWheel || '';
+                             if (!target || target.trim() === '') {
                                  // No specific target wheel - expire when leaving the wheel where status was applied
                                  if (status.appliedWheelId && status.appliedWheelId !== newWheelName) {
                                      addLogMessage(`-> Trạng thái <span class="log-highlight">${status.name}</span> đã hết hạn khi rời khỏi vòng quay ${status.appliedWheelId}.`);
@@ -2340,8 +2456,8 @@ function calculateGlobalStats(entity) {
                                  }
                              } else {
                                  // Specific target wheel - expire when arriving at the target wheel
-                                 if (newWheelName === status.targetWheel) {
-                                     addLogMessage(`-> Trạng thái <span class="log-highlight">${status.name}</span> đã hết hạn khi cheg đến vòng quay ${status.targetWheel}.`);
+                                 if (newWheelName === target) {
+                                     addLogMessage(`-> Trạng thái <span class="log-highlight">${status.name}</span> đã hết hạn khi cheg đến vòng quay ${target}.`);
                                      statusExpired = true;
                                      return false;
                                  }
@@ -2367,9 +2483,10 @@ function calculateGlobalStats(entity) {
         startIdleAnimation();
     }
     function enterEditMode(index) { editingSegmentIndex = index; const segment = wheelsData[currentWheelName].segments[index]; editingSegmentData = JSON.parse(JSON.stringify(segment)); populateActionPanelFromEditingState(); updateAllActionSummaries(); mainActionBtn.textContent = "Cập Nhật"; cancelEditBtn.style.display = 'block'; pasteActionsBtn.disabled = copiedActions === null; updateCreatorUI(); }
-    function populateActionPanelFromEditingState() { resetActionPanelVisuals(); const { text, description, weight, color, actions = [] } = editingSegmentData; segmentTextInput.value = text || ''; segmentDescriptionInput.value = description || ''; segmentWeightInput.value = weight || 1; segmentColorInput.value = color || '#8AC926'; const setVarActions = actions.filter(a => a.type === 'setVariable'); actionSetVariableEnabled.checked = setVarActions.length > 0; setVariableActionsContainer.innerHTML = ''; setVarActions.forEach(action => setVariableActionsContainer.appendChild(createSetVariableActionRow(action))); const executeMacroAction = actions.find(a => a.type === 'executeMacro'); actionExecuteMacroEnabled.checked = !!executeMacroAction; if(executeMacroAction) actionExecuteMacroTarget.value = executeMacroAction.targetMacro; const goToWheelAction = actions.find(a => a.type === 'goToWheel'); actionGoToWheelEnabled.checked = !!goToWheelAction; if(goToWheelAction) actionTargetWheelSelect.value = goToWheelAction.target; const jumpToWheelAction = actions.find(a => a.type === 'jumpToWheel'); actionJumpToWheelEnabled.checked = !!jumpToWheelAction; if(jumpToWheelAction) actionJumpTargetWheelSelect.value = jumpToWheelAction.targetWheelId || 'lowest_bs_source'; const playSoundAction = actions.find(a => a.type === 'playSound'); actionPlaySoundEnabled.checked = !!playSoundAction; if(playSoundAction && playSoundAction.soundData) { clearActionSoundBtn.style.display = 'inline-block'; } const conditionalAction = actions.find(a => a.type === 'conditionalReroll'); actionConditionalEnabled.checked = !!conditionalAction; if (conditionalAction) { conditionOperatorSelect.value = conditionalAction.operator; conditionValueInput.value = conditionalAction.value; conditionRerollsInput.value = conditionalAction.maxRerolls || 1; } const setSlotsAction = actions.find(a => a.type === 'setCollectionSlots'); actionSetCollectionSlotsEnabled.checked = !!setSlotsAction; if(setSlotsAction) { actionSetCollectionSlotsTarget.value = setSlotsAction.targetCollection; actionSetCollectionSlotsValue.value = setSlotsAction.value; } const addToCollectionAction = actions.find(a => a.type === 'addToCollection'); actionAddToCollectionEnabled.checked = !!addToCollectionAction; if(addToCollectionAction) actionAddToCollectionTarget.value = addToCollectionAction.targetCollection; const setItemInSlotAction = actions.find(a => a.type === 'setItemInSlot'); actionSetItemInSlotEnabled.checked = !!setItemInSlotAction; if(setItemInSlotAction) { actionSetItemInSlotTarget.value = setItemInSlotAction.targetCollection; actionSetItemInSlotSlot.value = setItemInSlotAction.slot; actionSetItemInSlotValue.value = setItemInSlotAction.value; } const removeItemsAction = actions.find(a => a.type === 'removeItems'); actionRemoveItemsEnabled.checked = !!removeItemsAction; if(removeItemsAction) { actionRemoveItemsTarget.value = removeItemsAction.targetCollection; actionRemoveItemsMode.value = removeItemsAction.mode || 'random'; actionRemoveItemsAmountType.value = removeItemsAction.amountType || 'specific'; actionRemoveItemsAmountValue1.value = removeItemsAction.amountValue1 || ''; actionRemoveItemsAmountValue2.value = removeItemsAction.amountValue2 || ''; actionRemoveItemsAmountValue3.value = removeItemsAction.amountValue3 || ''; updateRemoveItemsAmountUI(); } document.querySelectorAll('#segment-action-panel .action-header input').forEach(el => { const details = el.closest('.action-group').querySelector('.action-details'); if (details) details.style.display = el.checked ? 'flex' : 'none'; }); }
-    function resetActionPanelVisuals() { document.querySelectorAll('#segment-action-panel .custom-checkbox').forEach(cb => cb.checked = false); document.querySelectorAll('#segment-action-panel .action-details').forEach(el => el.style.display = 'none'); document.querySelectorAll('.action-summary').forEach(el => el.textContent = ''); setVariableActionsContainer.innerHTML = ''; actionSoundUpload.value = ''; clearActionSoundBtn.style.display = 'none'; actionTargetWheelSelect.innerHTML = '<option value="">Chọn Vòng Quay</option>'; actionJumpTargetWheelSelect.innerHTML = '<option value="lowest_bs_source">Vòng quay nguồn chỉ số cơ bản thấp nhất</option><option value="highest_bs_source">Vòng quay nguồn chỉ số cơ bản cao nhất</option>'; Object.keys(wheelsData).forEach(name => { const option = document.createElement('option'); option.value = name; option.textContent = name; if (name !== currentWheelName) { actionTargetWheelSelect.appendChild(option); } const jumpOpt = document.createElement('option'); jumpOpt.value = name; jumpOpt.textContent = name; actionJumpTargetWheelSelect.appendChild(jumpOpt); }); actionSetCollectionSlotsValue.value = ''; actionSetItemInSlotSlot.value = ''; actionSetItemInSlotValue.value = ''; actionRemoveItemsAmountValue1.value = ''; actionRemoveItemsAmountValue2.value = ''; actionRemoveItemsAmountValue3.value = ''; }
-    function updateAllActionSummaries() { const actions = editingSegmentData.actions || []; const summary = (selector, text) => { const el = document.querySelector(selector); if(el) el.textContent = text; }; summary('#action-executeMacro-enabled ~ .action-summary', actions.find(a=>a.type==='executeMacro') ? `-> ${macros[actions.find(a=>a.type==='executeMacro').targetMacro]?.name || '?'}` : ''); summary('#action-setVariable-enabled ~ .action-summary', actions.filter(a=>a.type==='setVariable').length > 0 ? actions.filter(a=>a.type==='setVariable').map(a => `${a.target}.${a.targetProperty||'bonus'} ${a.operator} ${a.value}`).join(', ') : ''); const setSlotsAction = actions.find(a=>a.type==='setCollectionSlots'); summary('#action-setCollectionSlots-enabled ~ .action-summary', setSlotsAction ? `[${collectionTemplate[setSlotsAction.targetCollection]?.name||'?'}] = ${setSlotsAction.value} ô` : ''); const addToCollectionAction = actions.find(a=>a.type==='addToCollection'); summary('#action-addToCollection-enabled ~ .action-summary', addToCollectionAction ? `Thêm vào [${collectionTemplate[addToCollectionAction.targetCollection]?.name||'?'}]` : ''); const goToWheelAction = actions.find(a=>a.type==='goToWheel'); summary('#action-goToWheel-enabled ~ .action-summary', (goToWheelAction && goToWheelAction.target) ? `-> ${goToWheelAction.target}` : ''); const jumpToWheelAction = actions.find(a=>a.type==='jumpToWheel'); summary('#action-jumpToWheel-enabled ~ .action-summary', (jumpToWheelAction && jumpToWheelAction.targetWheelId) ? `-> Nhảy ${jumpToWheelAction.targetWheelId}` : ''); const playSoundAction = actions.find(a=>a.type==='playSound'); summary('#action-playSound-enabled ~ .action-summary', (playSoundAction && playSoundAction.soundData) ? `Phát âm thanh tùy chỉnh` : ''); const conditionalAction = actions.find(a=>a.type==='conditionalReroll'); summary('#action-conditional-enabled ~ .action-summary', conditionalAction ? `Nếu KQ ${conditionalAction.operator} ${conditionalAction.value}, quay lại ${conditionalAction.maxRerolls} lần` : ''); const setItemInSlotAction = actions.find(a=>a.type==='setItemInSlot'); summary('#action-setItemInSlot-enabled ~ .action-summary', setItemInSlotAction ? `Gán ô #${setItemInSlotAction.slot} = ${setItemInSlotAction.value}` : ''); const removeItemsAction = actions.find(a=>a.type==='removeItems'); let removeSummary = ''; if (removeItemsAction) { const modeText = { random: 'ngẫu nhiên', oldest: 'cũ nhất', newest: 'mới nhất'}[removeItemsAction.mode]; let amountText = ''; switch (removeItemsAction.amountType) { case 'specific': amountText = `${removeItemsAction.amountValue1}`; break; case 'range': amountText = `từ ${removeItemsAction.amountValue2} đến ${removeItemsAction.amountValue3}`; break; case 'all': amountText = 'toàn bộ'; break; } removeSummary = `Xóa ${amountText} vật phẩm ${modeText}`; } summary('#action-removeItems-enabled ~ .action-summary', removeSummary); }
+    function populateActionPanelFromEditingState() { resetActionPanelVisuals(); const { text, description, weight, color, actions = [] } = editingSegmentData; segmentTextInput.value = text || ''; segmentDescriptionInput.value = description || ''; segmentWeightInput.value = weight || 1; segmentColorInput.value = color || '#8AC926'; const setVarActions = actions.filter(a => a.type === 'setVariable'); actionSetVariableEnabled.checked = setVarActions.length > 0; setVariableActionsContainer.innerHTML = ''; setVarActions.forEach(action => setVariableActionsContainer.appendChild(createSetVariableActionRow(action))); const executeMacroAction = actions.find(a => a.type === 'executeMacro'); actionExecuteMacroEnabled.checked = !!executeMacroAction; if(executeMacroAction) actionExecuteMacroTarget.value = executeMacroAction.targetMacro; const goToWheelAction = actions.find(a => a.type === 'goToWheel'); actionGoToWheelEnabled.checked = !!goToWheelAction; if(goToWheelAction) actionTargetWheelSelect.value = goToWheelAction.target; const jumpToWheelAction = actions.find(a => a.type === 'jumpToWheel'); actionJumpToWheelEnabled.checked = !!jumpToWheelAction; if(jumpToWheelAction) actionJumpTargetWheelSelect.value = jumpToWheelAction.targetWheelId || 'lowest_bs_source'; const playSoundAction = actions.find(a => a.type === 'playSound'); actionPlaySoundEnabled.checked = !!playSoundAction; if(playSoundAction && playSoundAction.soundData) { clearActionSoundBtn.style.display = 'inline-block'; } const conditionalAction = actions.find(a => a.type === 'conditionalReroll'); actionConditionalEnabled.checked = !!conditionalAction; if (conditionalAction) { conditionOperatorSelect.value = conditionalAction.operator; conditionValueInput.value = conditionalAction.value; conditionRerollsInput.value = conditionalAction.maxRerolls || 1; } const setSlotsAction = actions.find(a => a.type === 'setCollectionSlots'); actionSetCollectionSlotsEnabled.checked = !!setSlotsAction; if(setSlotsAction) { actionSetCollectionSlotsTarget.value = setSlotsAction.targetCollection; actionSetCollectionSlotsValue.value = setSlotsAction.value; } const addToCollectionAction = actions.find(a => a.type === 'addToCollection'); actionAddToCollectionEnabled.checked = !!addToCollectionAction; if(addToCollectionAction) actionAddToCollectionTarget.value = addToCollectionAction.targetCollection; const setItemInSlotAction = actions.find(a => a.type === 'setItemInSlot'); actionSetItemInSlotEnabled.checked = !!setItemInSlotAction; if(setItemInSlotAction) { actionSetItemInSlotTarget.value = setItemInSlotAction.targetCollection; actionSetItemInSlotSlot.value = setItemInSlotAction.slot; actionSetItemInSlotValue.value = setItemInSlotAction.value; } const removeItemsAction = actions.find(a => a.type === 'removeItems'); actionRemoveItemsEnabled.checked = !!removeItemsAction; if(removeItemsAction) { actionRemoveItemsTarget.value = removeItemsAction.targetCollection; actionRemoveItemsMode.value = removeItemsAction.mode || 'random'; actionRemoveItemsAmountType.value = removeItemsAction.amountType || 'specific'; actionRemoveItemsAmountValue1.value = removeItemsAction.amountValue1 || ''; actionRemoveItemsAmountValue2.value = removeItemsAction.amountValue2 || ''; actionRemoveItemsAmountValue3.value = removeItemsAction.amountValue3 || ''; updateRemoveItemsAmountUI(); } const applyStatusAction = actions.find(a => a.type === 'applyStatus' && a._inline); document.getElementById('action-applyStatus-enabled').checked = !!applyStatusAction; if (applyStatusAction) { document.getElementById('action-status-name').value = applyStatusAction.statusName || ''; document.getElementById('action-status-desc').value = applyStatusAction.statusDescription || ''; const endType = applyStatusAction.endType === 'afterWheel' ? 'wheel_end' : 'turn_count'; document.getElementById('action-status-dur-type').value = endType; document.getElementById('action-status-dur-type').dispatchEvent(new Event('change')); if (applyStatusAction.endType === 'afterWheel') { document.getElementById('action-status-dur-val').value = applyStatusAction.endWheel || ''; document.getElementById('action-status-target-wheel').value = applyStatusAction.endWheel || ''; } else { document.getElementById('action-status-dur-val').value = applyStatusAction.spinCount || 3; } const effectsContainer = document.getElementById('segment-status-effects-container'); effectsContainer.innerHTML = ''; (applyStatusAction.effects || []).forEach(effect => { const row = document.createElement('div'); row.className = 'status-effect-row'; row.style.cssText = 'display:flex;gap:0.25rem;align-items:center;margin-bottom:0.25rem;';             const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            row.innerHTML = `<select class="effect-target" style="flex:1;"><option value="">Chọn chỉ số</option>${Object.keys(variableTemplate).map(v => `<option value="${v}" ${effect.target === v ? 'selected' : ''}>${v}</option>`).join('')}</select><select class="effect-operator" style="width:60px;"><option value="min" ${effect.operator === 'min' ? 'selected' : ''}>min</option><option value="max" ${effect.operator === 'max' ? 'selected' : ''}>max</option><option value="override" ${effect.operator === 'override' ? 'selected' : ''}>=</option></select><input class="effect-value" type="text" placeholder="Value" style="flex:1;" value="${escHtml(effect.value || '')}"><button type="button" class="btn-delete-effect" style="background:none;border:none;color:var(--danger);cursor:pointer;">X</button>`; row.querySelector('.btn-delete-effect').addEventListener('click', () => row.remove()); effectsContainer.appendChild(row); }); } const removeStatusAction = actions.find(a => a.type === 'removeStatus'); document.getElementById('action-removeStatus-enabled').checked = !!removeStatusAction; if (removeStatusAction) document.getElementById('action-status-remove-name').value = removeStatusAction.statusName || ''; document.querySelectorAll('#segment-action-panel .action-header input').forEach(el => { const details = el.closest('.action-group').querySelector('.action-details'); if (details) details.style.display = el.checked ? 'flex' : 'none'; }); }
+    function resetActionPanelVisuals() { document.querySelectorAll('#segment-action-panel .custom-checkbox').forEach(cb => cb.checked = false); document.querySelectorAll('#segment-action-panel .action-details').forEach(el => el.style.display = 'none'); document.querySelectorAll('.action-summary').forEach(el => el.textContent = ''); setVariableActionsContainer.innerHTML = ''; actionSoundUpload.value = ''; clearActionSoundBtn.style.display = 'none'; actionTargetWheelSelect.innerHTML = '<option value="">Chọn Vòng Quay</option>'; actionJumpTargetWheelSelect.innerHTML = '<option value="lowest_bs_source">Vòng quay nguồn chỉ số cơ bản thấp nhất</option><option value="highest_bs_source">Vòng quay nguồn chỉ số cơ bản cao nhất</option>'; Object.keys(wheelsData).forEach(name => { const option = document.createElement('option'); option.value = name; option.textContent = name; if (name !== currentWheelName) { actionTargetWheelSelect.appendChild(option); } const jumpOpt = document.createElement('option'); jumpOpt.value = name; jumpOpt.textContent = name; actionJumpTargetWheelSelect.appendChild(jumpOpt); }); actionSetCollectionSlotsValue.value = ''; actionSetItemInSlotSlot.value = ''; actionSetItemInSlotValue.value = ''; actionRemoveItemsAmountValue1.value = ''; actionRemoveItemsAmountValue2.value = ''; actionRemoveItemsAmountValue3.value = ''; document.getElementById('action-status-name').value = ''; document.getElementById('action-status-desc').value = ''; document.getElementById('action-status-dur-val').value = ''; document.getElementById('action-status-target-wheel').value = ''; document.getElementById('segment-status-effects-container').innerHTML = ''; document.getElementById('action-status-remove-name').value = ''; }
+    function updateAllActionSummaries() { const actions = editingSegmentData.actions || []; const summary = (selector, text) => { const el = document.querySelector(selector); if(el) el.textContent = text; }; summary('#action-executeMacro-enabled ~ .action-summary', actions.find(a=>a.type==='executeMacro') ? `-> ${macros[actions.find(a=>a.type==='executeMacro').targetMacro]?.name || '?'}` : ''); summary('#action-setVariable-enabled ~ .action-summary', actions.filter(a=>a.type==='setVariable').length > 0 ? actions.filter(a=>a.type==='setVariable').map(a => `${a.target}.${a.targetProperty||'bonus'} ${a.operator} ${a.value}`).join(', ') : ''); const setSlotsAction = actions.find(a=>a.type==='setCollectionSlots'); summary('#action-setCollectionSlots-enabled ~ .action-summary', setSlotsAction ? `[${collectionTemplate[setSlotsAction.targetCollection]?.name||'?'}] = ${setSlotsAction.value} ô` : ''); const addToCollectionAction = actions.find(a=>a.type==='addToCollection'); summary('#action-addToCollection-enabled ~ .action-summary', addToCollectionAction ? `Thêm vào [${collectionTemplate[addToCollectionAction.targetCollection]?.name||'?'}]` : ''); const goToWheelAction = actions.find(a=>a.type==='goToWheel'); summary('#action-goToWheel-enabled ~ .action-summary', (goToWheelAction && goToWheelAction.target) ? `-> ${goToWheelAction.target}` : ''); const jumpToWheelAction = actions.find(a=>a.type==='jumpToWheel'); summary('#action-jumpToWheel-enabled ~ .action-summary', (jumpToWheelAction && jumpToWheelAction.targetWheelId) ? `-> Nhảy ${jumpToWheelAction.targetWheelId}` : ''); const playSoundAction = actions.find(a=>a.type==='playSound'); summary('#action-playSound-enabled ~ .action-summary', (playSoundAction && playSoundAction.soundData) ? `Phát âm thanh tùy chỉnh` : ''); const conditionalAction = actions.find(a=>a.type==='conditionalReroll'); summary('#action-conditional-enabled ~ .action-summary', conditionalAction ? `Nếu KQ ${conditionalAction.operator} ${conditionalAction.value}, quay lại ${conditionalAction.maxRerolls} lần` : ''); const setItemInSlotAction = actions.find(a=>a.type==='setItemInSlot'); summary('#action-setItemInSlot-enabled ~ .action-summary', setItemInSlotAction ? `Gán ô #${setItemInSlotAction.slot} = ${setItemInSlotAction.value}` : ''); const removeItemsAction = actions.find(a=>a.type==='removeItems'); let removeSummary = ''; if (removeItemsAction) { const modeText = { random: 'ngẫu nhiên', oldest: 'cũ nhất', newest: 'mới nhất'}[removeItemsAction.mode]; let amountText = ''; switch (removeItemsAction.amountType) { case 'specific': amountText = `${removeItemsAction.amountValue1}`; break; case 'range': amountText = `từ ${removeItemsAction.amountValue2} đến ${removeItemsAction.amountValue3}`; break; case 'all': amountText = 'toàn bộ'; break; } removeSummary = `Xóa ${amountText} vật phẩm ${modeText}`; } summary('#action-removeItems-enabled ~ .action-summary', removeSummary); const applyStatusAction = actions.find(a => a.type === 'applyStatus' && a._inline); summary('#action-applyStatus-enabled ~ .action-summary', applyStatusAction ? `-> ${applyStatusAction.statusName} (${applyStatusAction.endType === 'afterWheel' ? 'Hết tại VQ' : applyStatusAction.spinCount + ' lượt'})` : ''); const removeStatusAction = actions.find(a => a.type === 'removeStatus'); summary('#action-removeStatus-enabled ~ .action-summary', removeStatusAction ? `-> Xóa ${removeStatusAction.statusName}` : ''); }
     function exitEditMode() { 
         editingSegmentIndex = null; 
         const randomHex = hslToHex(Math.floor(Math.random() * 360), 80, 55);
@@ -2584,6 +2701,7 @@ function calculateGlobalStats(entity) {
             }
  
             recalculateActiveEntityStats();
+            processEntityStatuses('afterEachSpin', resultContext);
 
             if (wheelWasDeleted) {
                 loadWheel(null);
@@ -2615,18 +2733,23 @@ function calculateGlobalStats(entity) {
                 
                 // Tick Statuses
                 if (activeEntity.statuses) {
+                    processEntityStatuses('afterFinalSpin', resultContext);
+                    
                     activeEntity.statuses = activeEntity.statuses.filter(status => {
-                        const isTurnCount = status.type === 'turn_count' || status.durationType === 'turn';
+                        const isTurnCount = status.endType === 'afterSpins' || status.type === 'turn_count' || status.durationType === 'turn' || status.endType === undefined;
                         if (isTurnCount) {
-                            if (status.remaining !== undefined) status.remaining--;
-                            if (status.remainingDuration !== undefined) status.remainingDuration--;
-                            const rem = status.remaining !== undefined ? status.remaining : status.remainingDuration;
+                            let rem = status.spinCount !== undefined ? status.spinCount : (status.remaining !== undefined ? status.remaining : status.remainingDuration);
+                            rem--;
+                            if (status.spinCount !== undefined) status.spinCount = rem;
+                            if (status.remaining !== undefined) status.remaining = rem;
+                            if (status.remainingDuration !== undefined) status.remainingDuration = rem;
+                            
                             if (rem <= 0) {
                                 addLogMessage(`-> Trạng thái <span class="log-highlight">${status.name}</span> đã hết hạn.`);
                                 return false;
                             }
                         } else {
-                            const target = status.targetWheel || status.targetWheelId || '';
+                            const target = status.endWheel || status.targetWheel || status.targetWheelId || '';
                             if (target === currentWheelName) {
                                 addLogMessage(`-> Trạng thái <span class="log-highlight">${status.name}</span> đã kết thúc cùng vòng quay.`);
                                 return false;
@@ -2897,12 +3020,59 @@ function calculateGlobalStats(entity) {
     rulesListUI.addEventListener('click', (e) => { const targetLi = e.target.closest('.list-item'); if (!targetLi) return; if (e.target.matches('.delete-rule-btn')) { e.stopPropagation(); const id = targetLi.dataset.id; conditionalRules = conditionalRules.filter(r => r.id !== id); if (activeEditor.id === id) activeEditor.id = null; loadEditor(null, null); throttledSaveState(); } else { loadEditor('conditional', targetLi.dataset.id); } });
     addMacroBtn.addEventListener('click', () => { const newMacro = { id: `macro_${Date.now()}`, name: 'Macro Mới', actions: [] }; macros[newMacro.id] = newMacro; loadEditor('macro', newMacro.id); throttledSaveState(); });
     macrosListUI.addEventListener('click', (e) => { const targetLi = e.target.closest('.list-item'); if (!targetLi) return; if (e.target.matches('.delete-macro-btn')) { e.stopPropagation(); const id = targetLi.dataset.id; delete macros[id]; if (activeEditor.id === id) activeEditor.id = null; loadEditor(null, null); throttledSaveState(); } else { loadEditor('macro', targetLi.dataset.id); } });
-    logicEditor.addEventListener('input', (e) => { if (e.target.closest('#rule-editor-content, #computed-variable-editor-content, #macro-editor-content')) saveActiveEditor(); });
-    logicEditor.addEventListener('change', (e) => { if (e.target.closest('#rule-editor-content, #computed-variable-editor-content, #macro-editor-content')) saveActiveEditor(); });
-    logicEditor.addEventListener('click', e => { const target = e.target; if (target.matches('.btn-delete-action')) { target.parentElement.remove(); saveActiveEditor(); } else if (target.matches('.add-rule-condition-btn')) { target.previousElementSibling.appendChild(createRuleConditionRow()); saveActiveEditor(); } else if (target.matches('.add-item-to-checklist-btn')) { const checklistContainer = target.previousElementSibling; const row = document.createElement('div'); row.className = 'item-checklist-row'; row.innerHTML = `<input type="text" list="item-suggestions" placeholder="Tên vật phẩm..."><button class="btn-danger btn-sm delete-checklist-item-btn">-</button>`; checklistContainer.appendChild(row); } else if (target.matches('.delete-checklist-item-btn')) { target.parentElement.remove(); saveActiveEditor(); } else if (target.matches('.add-rule-action-btn')) { target.previousElementSibling.appendChild(createSetVariableActionRow({})); saveActiveEditor(); } else if (target.matches('.delete-rule-block-btn')) { const rule = conditionalRules.find(r => r.id === activeEditor.id); if (!rule) return; const index = parseInt(target.dataset.index, 10); rule.blocks.splice(index, 1); loadEditor('conditional', activeEditor.id); saveActiveEditor(); } });
+    addStatusBtn.addEventListener('click', () => { const newStatus = { id: `status_template_${Date.now()}`, name: 'Trạng Thái Mới', conditions: [], actions: [], endType: 'afterSpins', spinCount: 3, executionTiming: 'immediate', stackBehavior: 'stack' }; statusTemplate[newStatus.id] = newStatus; loadEditor('status', newStatus.id); throttledSaveState(); });
+    statusListUI.addEventListener('click', (e) => { const targetLi = e.target.closest('.list-item'); if (!targetLi) return; if (e.target.matches('.delete-status-btn')) { e.stopPropagation(); const id = targetLi.dataset.id; delete statusTemplate[id]; if (activeEditor.id === id) activeEditor.id = null; loadEditor(null, null); throttledSaveState(); } else { loadEditor('status', targetLi.dataset.id); } });
+    logicEditor.addEventListener('input', (e) => { if (e.target.closest('#rule-editor-content, #computed-variable-editor-content, #macro-editor-content, #status-editor-content')) saveActiveEditor(); });
+    logicEditor.addEventListener('change', (e) => { if (e.target.closest('#rule-editor-content, #computed-variable-editor-content, #macro-editor-content, #status-editor-content')) saveActiveEditor(); });
+    logicEditor.addEventListener('click', e => { 
+        const target = e.target; 
+        if (target.matches('.btn-delete-action')) { 
+            target.parentElement.remove(); saveActiveEditor(); 
+        } else if (target.matches('.add-rule-condition-btn')) { 
+            target.previousElementSibling.appendChild(createRuleConditionRow()); saveActiveEditor(); 
+        } else if (target.matches('.add-item-to-checklist-btn')) { 
+            const checklistContainer = target.previousElementSibling; 
+            const row = document.createElement('div'); 
+            row.className = 'item-checklist-row'; 
+            row.innerHTML = `<input type="text" list="item-suggestions" placeholder="Tên vật phẩm..."><button class="btn-danger btn-sm delete-checklist-item-btn">-</button>`; 
+            checklistContainer.appendChild(row); 
+        } else if (target.matches('.delete-checklist-item-btn')) { 
+            target.parentElement.remove(); saveActiveEditor(); 
+        } else if (target.matches('.add-rule-action-btn')) { 
+            target.parentElement.previousElementSibling.appendChild(createMacroActionRow({type: 'setVariable'})); saveActiveEditor(); 
+        } else if (target.matches('.save-rule-template-btn')) {
+            const templateName = prompt("Nhập tên Template (Macro) mới:");
+            if (templateName) {
+                const id = 'macro_' + Date.now();
+                const newMacro = { id, name: templateName, actions: [] };
+                const actionRows = target.parentElement.previousElementSibling.querySelectorAll('.macro-action-row');
+                actionRows.forEach(row => {
+                    const actionData = extractActionFromRow(row);
+                    if (actionData) newMacro.actions.push(actionData);
+                });
+                macros[id] = newMacro;
+                updateMacrosListUI();
+                
+                // Thay thế toàn bộ hành động hiện tại bằng Execute Macro
+                const actionsContainer = target.parentElement.previousElementSibling;
+                actionsContainer.innerHTML = '';
+                actionsContainer.appendChild(createMacroActionRow({type: 'executeMacro', targetMacro: id}));
+                saveActiveEditor();
+                showNotification(`Đã lưu thành công Template: ${templateName}`);
+            }
+        } else if (target.matches('.delete-rule-block-btn')) { 
+            const rule = conditionalRules.find(r => r.id === activeEditor.id); 
+            if (!rule) return; 
+            const index = parseInt(target.dataset.index, 10); 
+            rule.blocks.splice(index, 1); 
+            loadEditor('conditional', activeEditor.id); saveActiveEditor(); 
+        } 
+    });
     addRuleIfElseBtn.addEventListener('click', () => { const rule = conditionalRules.find(r => r.id === activeEditor.id); if(rule) { rule.blocks.push({ type: 'elseif', conditions: [], actions: [] }); loadEditor('conditional', activeEditor.id); saveActiveEditor(); } });
     addRuleElseBtn.addEventListener('click', () => { const rule = conditionalRules.find(r => r.id === activeEditor.id); if(rule) { rule.blocks.push({ type: 'else', actions: [] }); loadEditor('conditional', activeEditor.id); saveActiveEditor(); } });
     addMacroActionBtn.addEventListener('click', () => { if (activeEditor.type !== 'macro') return; macroActionsContainer.appendChild(createMacroActionRow({type: 'calculateAssign'})); saveActiveEditor(); });
+    addStatusConditionBtn.addEventListener('click', () => { if (activeEditor.type !== 'status') return; statusConditionsContainer.appendChild(createRuleConditionRow()); saveActiveEditor(); });
+    addStatusActionBtn.addEventListener('click', () => { if (activeEditor.type !== 'status') return; statusActionsContainer.appendChild(createMacroActionRow({type: 'calculateAssign'})); saveActiveEditor(); });
     copyWheelBtn.addEventListener('click', () => { if (!currentWheelName) return; copiedWheelData = JSON.parse(JSON.stringify(wheelsData[currentWheelName])); pasteWheelBtn.disabled = false; showNotification(`Đã sao chép vòng quay "${currentWheelName}"!`); });
     pasteWheelBtn.addEventListener('click', () => { if (!copiedWheelData) return; const newName = newWheelNameInput.value.trim().replace(/\s+/g, '_'); if (!newName) { showNotification("Vui lòng nhập tên cho vòng quay mới.", true); return; } if (wheelsData[newName]) { showNotification(`Lỗi: Tên vòng quay "${newName}" đã tồn tại.`, true); return; } wheelsData[newName] = JSON.parse(JSON.stringify(copiedWheelData)); newWheelNameInput.value = ''; loadWheel(newName); throttledSaveState(); showNotification(`Đã dán và tạo vòng quay mới "${newName}"!`); });
     createWheelBtn.addEventListener('click', () => { const name = newWheelNameInput.value.trim().replace(/\s+/g, '_'); if (!name) { showNotification('Vui lòng nhập tên vòng quay!', true); return; } if (wheelsData[name]) { showNotification('Lỗi: Tên vòng quay đã tồn tại!', true); return; } wheelsData[name] = { segments: [], settings: { removalMode: 'none', spinCountVariable: '', defaultLink: 'None' } }; newWheelNameInput.value = ''; loadWheel(name); throttledSaveState(); });
@@ -2990,7 +3160,7 @@ function calculateGlobalStats(entity) {
     defaultLinkSelect.addEventListener('change', (e) => { if (currentWheelName) { wheelsData[currentWheelName].settings.defaultLink = e.target.value; updateViewerActions(); throttledSaveState(); } });
     activeEntitySelector.addEventListener('change', e => { activeEntityId = e.target.value === 'none' ? null : e.target.value; recalculateActiveEntityStats(); if(activeEntityId) { addLogMessage(`Thực thể hoạt động được đổi thành <span class="log-highlight">${entities[activeEntityId]?.name}</span>.`); } else { addLogMessage(`Không có thực thể nào được chọn.`); } });
     segmentActionPanel.addEventListener('change', (e) => { if (!e.target.matches('.custom-checkbox')) return; const details = e.target.closest('.action-group').querySelector('.action-details'); if (details) details.style.display = e.target.checked ? 'flex' : 'none'; });
-    segmentActionPanel.addEventListener('input', () => { const actions = []; if(actionExecuteMacroEnabled.checked) { const target = actionExecuteMacroTarget.value; if (target) actions.push({ type: 'executeMacro', targetMacro: target }); } if (actionSetVariableEnabled.checked) { setVariableActionsContainer.querySelectorAll('.set-variable-action-row').forEach(row => { const actionData = { type: 'setVariable', target: row.querySelector('.action-var-name').value.trim().replace(/\s+/g, '_'), targetProperty: row.querySelector('.action-var-target-prop').value, operator: row.querySelector('.action-var-operator').value }; if (actionData.operator === 'invert') { actionData.min = row.querySelector('.action-var-min').value.trim(); actionData.max = row.querySelector('.action-var-max').value.trim(); } else if (!(UNARY_OPERATORS.includes(actionData.operator))) { actionData.value = row.querySelector('.action-var-value').value.trim(); } if (actionData.target) actions.push(actionData); }); } if (actionSetCollectionSlotsEnabled.checked) { const value = actionSetCollectionSlotsValue.value.trim(); const target = actionSetCollectionSlotsTarget.value; if (value && target) actions.push({ type: 'setCollectionSlots', targetCollection: target, value: value }); } if (actionAddToCollectionEnabled.checked) { const target = actionAddToCollectionTarget.value; if(target) actions.push({ type: 'addToCollection', targetCollection: target}); } if (actionSetItemInSlotEnabled.checked) { const target = actionSetItemInSlotTarget.value, slot = actionSetItemInSlotSlot.value.trim(), value = actionSetItemInSlotValue.value.trim(); if (target && slot && value) actions.push({type: 'setItemInSlot', targetCollection: target, slot, value}); } if (actionRemoveItemsEnabled.checked) { const actionData = { type: 'removeItems', targetCollection: actionRemoveItemsTarget.value, mode: actionRemoveItemsMode.value, amountType: actionRemoveItemsAmountType.value, amountValue1: actionRemoveItemsAmountValue1.value, amountValue2: actionRemoveItemsAmountValue2.value, amountValue3: actionRemoveItemsAmountValue3.value, }; actions.push(actionData); } if (actionGoToWheelEnabled.checked) { actions.push({ type: 'goToWheel', target: actionTargetWheelSelect.value }); } if (actionJumpToWheelEnabled.checked) { actions.push({ type: 'jumpToWheel', targetWheelId: actionJumpTargetWheelSelect.value }); } if (actionPlaySoundEnabled.checked) { const soundAction = editingSegmentData.actions?.find(a=>a.type==='playSound'); if(soundAction) actions.push(soundAction); } if (actionConditionalEnabled.checked) { actions.push({ type: 'conditionalReroll', operator: conditionOperatorSelect.value, value: parseInt(conditionValueInput.value), maxRerolls: parseInt(conditionRerollsInput.value) || 1 }); } editingSegmentData.actions = actions; updateAllActionSummaries(); });
+    segmentActionPanel.addEventListener('input', () => { const actions = []; if(actionExecuteMacroEnabled.checked) { const target = actionExecuteMacroTarget.value; if (target) actions.push({ type: 'executeMacro', targetMacro: target }); } if (actionSetVariableEnabled.checked) { setVariableActionsContainer.querySelectorAll('.set-variable-action-row').forEach(row => { const actionData = { type: 'setVariable', target: row.querySelector('.action-var-name').value.trim().replace(/\s+/g, '_'), targetProperty: row.querySelector('.action-var-target-prop').value, operator: row.querySelector('.action-var-operator').value }; if (actionData.operator === 'invert') { actionData.min = row.querySelector('.action-var-min').value.trim(); actionData.max = row.querySelector('.action-var-max').value.trim(); } else if (!(UNARY_OPERATORS.includes(actionData.operator))) { actionData.value = row.querySelector('.action-var-value').value.trim(); } if (actionData.target) actions.push(actionData); }); } if (actionSetCollectionSlotsEnabled.checked) { const value = actionSetCollectionSlotsValue.value.trim(); const target = actionSetCollectionSlotsTarget.value; if (value && target) actions.push({ type: 'setCollectionSlots', targetCollection: target, value: value }); } if (actionAddToCollectionEnabled.checked) { const target = actionAddToCollectionTarget.value; if(target) actions.push({ type: 'addToCollection', targetCollection: target}); } if (actionSetItemInSlotEnabled.checked) { const target = actionSetItemInSlotTarget.value, slot = actionSetItemInSlotSlot.value.trim(), value = actionSetItemInSlotValue.value.trim(); if (target && slot && value) actions.push({type: 'setItemInSlot', targetCollection: target, slot, value}); } if (actionRemoveItemsEnabled.checked) { const actionData = { type: 'removeItems', targetCollection: actionRemoveItemsTarget.value, mode: actionRemoveItemsMode.value, amountType: actionRemoveItemsAmountType.value, amountValue1: actionRemoveItemsAmountValue1.value, amountValue2: actionRemoveItemsAmountValue2.value, amountValue3: actionRemoveItemsAmountValue3.value, }; actions.push(actionData); } if (actionGoToWheelEnabled.checked) { actions.push({ type: 'goToWheel', target: actionTargetWheelSelect.value }); } if (actionJumpToWheelEnabled.checked) { actions.push({ type: 'jumpToWheel', targetWheelId: actionJumpTargetWheelSelect.value }); } if (actionPlaySoundEnabled.checked) { const soundAction = editingSegmentData.actions?.find(a=>a.type==='playSound'); if(soundAction) actions.push(soundAction); } if (actionConditionalEnabled.checked) { actions.push({ type: 'conditionalReroll', operator: conditionOperatorSelect.value, value: parseInt(conditionValueInput.value), maxRerolls: parseInt(conditionRerollsInput.value) || 1 }); } if (document.getElementById('action-applyStatus-enabled').checked) { const name = document.getElementById('action-status-name').value.trim(); if (name) { const durType = document.getElementById('action-status-dur-type').value; const durVal = document.getElementById('action-status-dur-val').value.trim(); const inlineStatus = { type: 'applyStatus', _inline: true, statusName: name, statusDescription: document.getElementById('action-status-desc').value.trim(), endType: durType === 'wheel_end' ? 'afterWheel' : 'afterSpins' }; if (durType === 'turn_count') { inlineStatus.spinCount = parseInt(durVal) || 3; } else { inlineStatus.endWheel = document.getElementById('action-status-target-wheel').value.trim() || durVal; } const effects = []; document.querySelectorAll('#segment-status-effects-container .status-effect-row').forEach(row => { const target = row.querySelector('.effect-target').value.trim(); const operator = row.querySelector('.effect-operator').value; const value = row.querySelector('.effect-value').value.trim(); if (target) effects.push({ target, operator, value }); }); if (effects.length > 0) inlineStatus.effects = effects; actions.push(inlineStatus); } } if (document.getElementById('action-removeStatus-enabled').checked) { const name = document.getElementById('action-status-remove-name').value.trim(); if (name) actions.push({ type: 'removeStatus', statusName: name }); } editingSegmentData.actions = actions; updateAllActionSummaries(); });
     addSetVariableActionBtn.addEventListener('click', () => { setVariableActionsContainer.appendChild(createSetVariableActionRow({})); });
     setVariableActionsContainer.addEventListener('click', (e) => { if (e.target.classList.contains('btn-delete-action')) { e.target.closest('.set-variable-action-row').remove(); segmentActionPanel.dispatchEvent(new Event('input')); }});
     function updateRemoveItemsAmountUI() { const amountType = actionRemoveItemsAmountType.value; removeItemsAmountSpecific.classList.toggle('active', amountType === 'specific'); removeItemsAmountRange.classList.toggle('active', amountType === 'range'); }
@@ -3095,6 +3265,10 @@ function calculateGlobalStats(entity) {
     itemSearchInput.addEventListener('input', updateItemDatabaseListUI);
     tagSearchInput.addEventListener('input', updateTagManagerListUI);
 
+    if(openSettingsBtn) openSettingsBtn.addEventListener('click', () => { updateProjectSettingsUI(); settingsModal.style.display = 'flex'; });
+    if(closeSettingsModalBtn) closeSettingsModalBtn.addEventListener('click', () => { settingsModal.style.display = 'none'; });
+    window.addEventListener('click', (e) => { if (e.target === settingsModal) settingsModal.style.display = 'none'; });
+
     themeAccentColorInput.addEventListener('input', e => { projectSettings.themeAccent = e.target.value; applyProjectStyles(); throttledSaveState(); });
     themeBgColorInput.addEventListener('input', e => { projectSettings.themeBg = e.target.value; applyProjectStyles(); throttledSaveState(); });
     showWheelBorderCheckbox.addEventListener('change', e => { projectSettings.showWheelBorder = e.target.checked; drawWheel(); throttledSaveState(); });
@@ -3189,24 +3363,73 @@ function calculateGlobalStats(entity) {
                 newStatus.id = `status_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
             }
             
-            if (newStatus.durationType && !newStatus.type) {
-                newStatus.type = newStatus.durationType === 'turn' ? 'turn_count' : 'wheel_end';
-            }
-            if (newStatus.type && !newStatus.durationType) {
-                newStatus.durationType = newStatus.type === 'turn_count' ? 'turn' : 'wheel';
-            }
-            if (newStatus.remainingDuration !== undefined && newStatus.remaining === undefined) {
-                newStatus.remaining = newStatus.remainingDuration;
-            }
-            if (newStatus.remaining !== undefined && newStatus.remainingDuration === undefined) {
-                newStatus.remainingDuration = newStatus.remaining;
+            if (newStatus.endType === undefined) newStatus.endType = 'afterSpins';
+            if (newStatus.spinCount === undefined) newStatus.spinCount = newStatus.remaining || 3;
+            if (newStatus.executionTiming === undefined) newStatus.executionTiming = 'immediate';
+            if (newStatus.stackBehavior === undefined) newStatus.stackBehavior = 'stack';
+            
+            if (newStatus.stackBehavior === 'reset') {
+                const existing = entity.statuses.find(s => s.name === newStatus.name);
+                if (existing) {
+                    existing.spinCount = newStatus.spinCount;
+                    existing.remaining = newStatus.spinCount;
+                    addLogMessage(`-> <span class="log-highlight">${entity.name}</span> làm mới thời hạn trạng thái: <span class="log-highlight">${newStatus.name}</span>.`);
+                    throttledSaveState();
+                    if (existing.executionTiming === 'immediate') processEntityStatuses('immediate', null, true);
+                    return;
+                }
             }
             
             newStatus.appliedWheelId = currentWheelName;
             entity.statuses.push(newStatus);
             addLogMessage(`-> <span class="log-highlight">${entity.name}</span> nhận trạng thái: <span class="log-highlight">${newStatus.name}</span>.`);
             throttledSaveState();
+            
+            if (newStatus.executionTiming === 'immediate') processEntityStatuses('immediate');
         }
+    }
+
+    function processEntityStatuses(timing, resultContext = null, force = false) {
+        const entity = getActiveEntity();
+        if (!entity || !entity.statuses) return;
+        
+        entity.statuses.forEach(status => {
+            if (status.executionTiming !== timing && !force) return;
+            
+            let conditionsMet = true;
+            if (status.conditions && status.conditions.length > 0) {
+                const logicOp = status.logicOperator || 'AND';
+                let metCount = 0;
+                
+                status.conditions.forEach(cond => {
+                    let met = false;
+                    if (cond.type === 'variableCompare') {
+                        const left = evaluateFormula(cond.left), right = evaluateFormula(cond.right);
+                        switch (cond.operator) {
+                            case '==': met = left == right; break;
+                            case '!=': met = left != right; break;
+                            case '>': met = left > right; break;
+                            case '<': met = left < right; break;
+                            case '>=': met = left >= right; break;
+                            case '<=': met = left <= right; break;
+                        }
+                    } else if (cond.type === 'hasItems') {
+                        const collection = entity.collections?.[cond.collectionId];
+                        if (collection) {
+                            met = cond.items.every(item => collection.slots.includes(item));
+                        }
+                    }
+                    if (met) metCount++;
+                });
+                
+                conditionsMet = logicOp === 'AND' ? (metCount === status.conditions.length) : (metCount > 0);
+            }
+            
+            if (conditionsMet && status.actions && status.actions.length > 0) {
+                addLogMessage(`-> Trạng thái <span class="log-highlight">${status.name}</span> kích hoạt hiệu ứng.`);
+                executeActions(status.actions, resultContext || { sourceWheelId: currentWheelName });
+            }
+        });
     }
 
     // =========================================================================

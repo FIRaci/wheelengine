@@ -6,6 +6,7 @@
     <title>Wheel Engine v19.4 - Premium</title>
     
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%236c757d' d='M90,50a40,40 0 0,1-40,40a40,40 0 0,1-40-40a40,40 0 0,1 40-40a40,40 0 0,1 40,40ZM50,20a30,30 0 1,0 0,60a30,30 0 1,0 0-60Z'%3E%3C/path%3E%3Cpath fill='%236c757d' d='M50,0a10,10 0 0,0-5,1.7V15h10V1.7A10,10 0 0,0 50,0Z'%3E%3C/path%3E%3Cpath fill='%236c757d' d='M50,85a10,10 0 0,0-5,1.7V100h10V86.7A10,10 0 0,0 50,85Z'%3E%3C/path%3E%3Cpath fill='%236c757d' d='M13.3,15a10,10 0 0,0-11.6,5L15,25V15Z'%3E%3C/path%3E%3Cpath fill='%236c757d' d='M86.7,85a10,10 0 0,0 11.6-5L85,75V85Z'%3E%3C/path%3E%3Cpath fill='%236c757d' d='M1.7,45a10,10 0 0,0 0,10H15V45Z'%3E%3C/path%3E%3Cpath fill='%236c757d' d='M98.3,55a10,10 0 0,0 0-10H85V55Z'%3E%3C/path%3E%3Cpath fill='%236c757d' d='M13.3,85a10,10 0 0,0-11.6-5L15,75V85Z'%3E%3C/path%3E%3Cpath fill='%236c757d' d='M86.7,15a10,10 0 0,0 11.6,5L85,25V15Z'%3E%3C/path%3E%3Cpath fill='%23ffde59' d='M58,25L42,55h15l-20,20 28-30H50Z'%3E%3C/path%3E%3C/svg%3E">
+
     
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
@@ -42,6 +43,7 @@
                 <button id="import-btn" class="btn btn-secondary">Import Dự Án</button>
                 <button id="export-btn" class="btn btn-secondary">Export Dự Án</button>
                 <input type="file" id="import-file-input" accept=".json" style="display: none;">
+                <button id="open-settings-btn" class="btn btn-secondary" title="Cài đặt hệ thống">⚙️</button>
             </div>
         </header>
 
@@ -394,7 +396,6 @@
                     <button class="sub-nav-link" data-subpage="item-database">Kho Báu (Vật Phẩm)</button>
                     <button class="sub-nav-link" data-subpage="tag-manager">Quản Lý Tags</button>
                     <button class="sub-nav-link" data-subpage="logic-map">Sơ Đồ Logic</button>
-                    <button class="sub-nav-link" data-subpage="project-settings">Cài Đặt & Giao Diện</button>
                 </nav>
                 <div id="templates-rules-subpage" class="logic-sub-page active">
                     <div class="logic-sidebar">
@@ -433,6 +434,12 @@
                             <ul id="macros-list"></ul>
                             <hr>
                             <button id="add-macro-btn" class="btn btn-primary">Thêm Macro Mới</button>
+                        </div>
+                        <div class="panel-section">
+                            <h2>Trạng Thái (Status)</h2>
+                            <ul id="status-list"></ul>
+                            <hr>
+                            <button id="add-status-btn" class="btn btn-primary">Thêm Trạng Thái Mới</button>
                         </div>
                         <div class="panel-section">
                             <h2>Biến Tính Toán</h2>
@@ -480,6 +487,74 @@
                                 <button id="add-macro-action-btn" class="btn btn-secondary btn-add-action">+ Thêm hành động</button>
                             </div>
                         </div>
+                        <div id="status-editor-content" style="display: none;">
+                            <h2 id="status-editor-title">Chỉnh Sửa Trạng Thái</h2>
+                            <div class="form-group">
+                                <label for="status-name-input">Tên Trạng Thái</label>
+                                <input type="text" id="status-name-input" placeholder="Archetype Mid Buff">
+                            </div>
+                            <div class="form-group">
+                                <label for="status-description-input">Mô tả</label>
+                                <textarea id="status-description-input" rows="2" placeholder="Set low stats to 4..."></textarea>
+                            </div>
+                            
+                            <div class="rule-block">
+                                <h3 class="rule-block-title">KHI CÁC ĐIỀU KIỆN SAU</h3>
+                                <div class="logic-operator-selector">
+                                    <label>Logic:</label>
+                                    <select id="status-logic-operator">
+                                        <option value="AND">AND (Tất cả phải đúng)</option>
+                                        <option value="OR">OR (Ít nhất 1 đúng)</option>
+                                    </select>
+                                </div>
+                                <div id="status-conditions-container"></div>
+                                <button id="add-status-condition-btn" class="btn btn-secondary btn-add-action">+ Thêm điều kiện</button>
+                            </div>
+                            
+                            <div class="rule-block">
+                                <h3 class="rule-block-title">THỰC HIỆN CÁC HÀNH ĐỘNG</h3>
+                                <div id="status-actions-container"></div>
+                                <button id="add-status-action-btn" class="btn btn-secondary btn-add-action">+ Thêm hành động</button>
+                            </div>
+                            
+                            <div class="rule-block">
+                                <h3 class="rule-block-title">KẾT THÚC TRẠNG THÁI</h3>
+                                <div class="form-group">
+                                    <label>Loại kết thúc</label>
+                                    <select id="status-end-type">
+                                        <option value="afterSpins">Sau X lượt quay</option>
+                                        <option value="afterWheel">Sau khi quay xong vòng quay cụ thể</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" id="status-spin-count-group">
+                                    <label for="status-spin-count">Số lượt quay</label>
+                                    <input type="number" id="status-spin-count" value="3" min="1">
+                                </div>
+                                <div class="form-group" id="status-end-wheel-group" style="display: none;">
+                                    <label for="status-end-wheel">Vòng quay kết thúc</label>
+                                    <select id="status-end-wheel"></select>
+                                </div>
+                            </div>
+                            
+                            <div class="rule-block">
+                                <h3 class="rule-block-title">CÀI ĐẶT THỰC THI</h3>
+                                <div class="form-group">
+                                    <label>Thời điểm thực thi</label>
+                                    <select id="status-execution-timing">
+                                        <option value="immediate">Ngay lập tức (Immediate)</option>
+                                        <option value="afterEachSpin">Sau mỗi lượt quay</option>
+                                        <option value="afterFinalSpin">Sau khi toàn bộ kết thúc</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Hành vi khi kích hoạt lại</label>
+                                    <select id="status-stack-behavior">
+                                        <option value="reset">Reset thời gian</option>
+                                        <option value="stack">Tách biệt (Stack)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
                         <div id="computed-variable-editor-content" style="display: none;">
                             <h2 id="computed-variable-editor-title">Chỉnh Sửa Biến Tính Toán</h2>
                             <div class="form-group"> <label>Công thức</label> <input type="text" id="computed-variable-formula" placeholder="suc_manh_base + nhanh_nhen_base"></div>
@@ -496,7 +571,7 @@
                                 <button id="add-rule-else-btn" class="btn btn-secondary">+ Thêm khối NGƯỢC LẠI (ELSE)</button>
                             </div>
                         </div>
-                        <p id="logic-editor-placeholder">Chọn một mục từ cột trái để chỉnh sửa.</p>
+                        <div id="logic-editor-placeholder"></div>
                     </div>
                 </div>
                 <div id="entities-subpage" class="logic-sub-page">
@@ -547,10 +622,7 @@
                              <h3>Các Kho Chứa</h3>
                              <div id="entity-collections-list"></div>
                         </div>
-                        <div id="entity-editor-placeholder" class="editor-placeholder">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                            <p>Chọn một thực thể từ cột trái để chỉnh sửa</p>
-                        </div>
+                        <div id="entity-editor-placeholder" class="editor-placeholder"></div>
                     </div>
                 </div>
                 <div id="item-database-subpage" class="logic-sub-page">
@@ -564,6 +636,11 @@
                             </div>
                             <p class="form-hint">Nơi định nghĩa tất cả vật phẩm trong dự án.</p>
                             <div id="item-database-list-container" class="list-container"></div>
+                            <hr>
+                            <div class="form-row">
+                                <input type="text" id="new-item-name" placeholder="Tên vật phẩm mới...">
+                                <button id="add-item-btn" class="btn btn-primary">Thêm</button>
+                            </div>
                         </div>
                     </div>
                     <div id="item-editor" class="panel-section">
@@ -603,10 +680,7 @@
                              <div id="item-effects-container"></div>
                              <button id="add-item-effect-btn" class="btn btn-secondary btn-add-action">+ Thêm Hiệu Ứng</button>
                         </div>
-                        <div id="item-editor-placeholder" class="editor-placeholder">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                            <p>Chọn một vật phẩm từ cột trái để chỉnh sửa</p>
-                        </div>
+                        <div id="item-editor-placeholder" class="editor-placeholder"></div>
                     </div>
                 </div>
                 <div id="tag-manager-subpage" class="logic-sub-page">
@@ -644,62 +718,7 @@
                                 <input type="file" id="tag-icon-upload" accept="image/*" class="image-upload-input">
                             </div>
                         </div>
-                        <div id="tag-editor-placeholder" class="editor-placeholder">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01"/></svg>
-                            <p>Chọn một tag từ cột trái để chỉnh sửa</p>
-                        </div>
-                    </div>
-                </div>
-                <div id="project-settings-subpage" class="logic-sub-page">
-                    <div class="logic-sidebar">
-                        <div class="panel-section">
-                            <h2>Giao Diện Dự Án</h2>
-                            <div class="form-group">
-                                <label for="theme-accent-color">Màu Nhấn (Accent Color)</label>
-                                <input type="color" id="theme-accent-color" value="#ffde59">
-                            </div>
-                            <div class="form-group">
-                                <label for="theme-bg-color">Màu Nền (Background)</label>
-                                <input type="color" id="theme-bg-color" value="#0f172a">
-                            </div>
-                            <hr>
-                            <h2>Vòng Quay (Visuals)</h2>
-                            <div class="checkbox-group">
-                                <input type="checkbox" id="show-wheel-border" checked>
-                                <label for="show-wheel-border">Hiển thị Khung (Border)</label>
-                            </div>
-                            <div class="form-group">
-                                <label for="wheel-border-color">Màu Khung</label>
-                                <input type="color" id="wheel-border-color" value="#ffffff">
-                            </div>
-                            <div class="form-group">
-                                <label for="wheel-border-width">Độ dày Khung (px)</label>
-                                <input type="number" id="wheel-border-width" value="5" min="0" max="20">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="panel-section">
-                        <h2>Tùy Chỉnh Nâng Cao</h2>
-                        <p class="form-hint">Cấu hình hành vi hệ thống.</p>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="enable-confetti" checked>
-                            <label for="enable-confetti">Hiệu ứng Pháo hoa khi trúng đồ hiếm</label>
-                        </div>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="auto-backup-toggle" checked>
-                            <label for="auto-backup-toggle">Tự động sao lưu (Auto-Backup)</label>
-                        </div>
-                        <div id="backup-restore-section" style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
-                            <label style="font-weight: 500; font-size: 0.9rem; color: #ccc;">Bản sao lưu gần đây:</label>
-                            <select id="backup-list-select" style="padding: 0.5rem; font-size: 0.9rem;">
-                                <option value="">-- Không có bản sao lưu nào --</option>
-                            </select>
-                            <button id="restore-backup-btn" class="btn btn-secondary btn-sm" style="width: fit-content;">Khôi phục từ Bản sao lưu</button>
-                        </div>
-                        <hr>
-                        <div class="btn-container">
-                            <button id="reset-to-default-style-btn" class="btn btn-secondary">Đặt lại Giao diện mặc định</button>
-                        </div>
+                        <div id="tag-editor-placeholder" class="editor-placeholder"></div>
                     </div>
                 </div>
                 <div id="logic-map-subpage" class="logic-sub-page">
@@ -751,7 +770,60 @@
     <datalist id="tag-suggestions"></datalist>
     <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.2/dist/vis-network.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal" style="display: none; align-items: center; justify-content: center;">
+        <div class="modal-content panel-section" style="max-width: 650px; width: 90%; max-height: 85vh; overflow-y: auto;">
+            <span class="close-modal-btn" id="close-settings-modal" style="float: right; font-size: 1.5rem; cursor: pointer;">&times;</span>
+            <h2 style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem;">Cài Đặt Dự Án</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                <div>
+                    <h3 style="color: var(--primary-yellow); margin-bottom: 1rem;">Giao Diện</h3>
+                    <div class="form-group">
+                        <label for="theme-accent-color">Màu Nhấn (Accent Color)</label>
+                        <input type="color" id="theme-accent-color" value="#ffde59" style="width: 100%;">
+                    </div>
+                    <div class="form-group">
+                        <label for="theme-bg-color">Màu Nền (Background)</label>
+                        <input type="color" id="theme-bg-color" value="#0f172a" style="width: 100%;">
+                    </div>
+                    <hr style="margin: 1.5rem 0;">
+                    <h3 style="color: var(--primary-yellow); margin-bottom: 1rem;">Vòng Quay (Visuals)</h3>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="show-wheel-border" checked class="custom-checkbox">
+                        <label for="show-wheel-border">Hiển thị Khung (Border)</label>
+                    </div>
+                    <div class="form-group">
+                        <label for="wheel-border-color">Màu Khung</label>
+                        <input type="color" id="wheel-border-color" value="#ffffff" style="width: 100%;">
+                    </div>
+                    <div class="form-group">
+                        <label for="wheel-border-width">Độ dày Khung (px)</label>
+                        <input type="number" id="wheel-border-width" value="5" min="0" max="20" style="width: 100%;">
+                    </div>
+                </div>
+                <div>
+                    <h3 style="color: var(--primary-yellow); margin-bottom: 1rem;">Hệ Thống</h3>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="enable-confetti" checked class="custom-checkbox">
+                        <label for="enable-confetti">Hiệu ứng Pháo hoa</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="auto-backup-toggle" checked class="custom-checkbox">
+                        <label for="auto-backup-toggle">Tự động sao lưu (Auto-Backup)</label>
+                    </div>
+                    <div id="backup-restore-section" style="margin-top: 1.5rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px;">
+                        <label style="font-weight: 500; font-size: 0.9rem; color: #ccc;">Bản sao lưu gần đây:</label>
+                        <select id="backup-list-select" style="width: 100%; margin: 0.5rem 0;"></select>
+                        <button id="restore-backup-btn" class="btn btn-secondary btn-sm" style="width: 100%;">Khôi phục</button>
+                    </div>
+                    <hr style="margin: 1.5rem 0;">
+                    <button id="reset-to-default-style-btn" class="btn btn-danger" style="width: 100%;">Khôi phục mặc định</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>
-

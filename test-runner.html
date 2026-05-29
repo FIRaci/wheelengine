@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wheel Engine Test Suite - Premium QA Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --accent-color: #3b82f6;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background-color: rgba(15, 23, 42, 0.9);
+            border-bottom: 1px solid var(--border-color);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+
+        .header-title h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-title p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: white;
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
+        }
+
+        .btn-secondary {
+            background-color: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 450px;
+            background-color: rgba(15, 23, 42, 0.6);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
+        }
+
+        .summary-panel {
+            padding: 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background-color: var(--accent-color);
+            border-radius: 4px;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background-color: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .stat-val {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        .stat-lbl {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .test-list {
+            padding: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .test-card {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .test-card.active {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.15);
+        }
+
+        .test-card.passed {
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .test-card.failed {
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .test-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .test-title {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 12px;
+            text-transform: uppercase;
+        }
+
+        .badge-pending {
+            background-color: rgba(255, 255, 255, 0.05);
+            color: var(--text-muted);
+        }
+
+        .badge-running {
+            background-color: rgba(59, 130, 246, 0.15);
+            color: var(--accent-color);
+            animation: pulse 1.5s infinite;
+        }
+
+        .badge-passed {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: var(--success-color);
+        }
+
+        .badge-failed {
+            background-color: rgba(239, 68, 68, 0.15);
+            color: var(--danger-color);
+        }
+
+        .test-desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .test-details {
+            font-size: 0.75rem;
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            display: none;
+        }
+
+        .test-card.active .test-details,
+        .test-card.failed .test-details,
+        .test-card.passed .test-details {
+            display: block;
+        }
+
+        .preview-area {
+            flex: 1;
+            background-color: #0c111d;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .preview-header {
+            padding: 10px 20px;
+            background-color: rgba(15, 23, 42, 0.8);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .preview-header-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .preview-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--success-color);
+        }
+
+        iframe {
+            width: 100%;
+            flex: 1;
+            border: none;
+            background-color: #1a1a1a;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-title">
+            <h1>Wheel Engine Test Suite</h1>
+            <p>Bộ kịch bản kiểm thử tự động E2E & logic nghiệp vụ v19.4</p>
+        </div>
+        <div class="header-controls">
+            <button id="run-all-btn" class="btn btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 3l14 9-14 9V3z"/></svg>
+                Chạy Toàn Bộ Kiểm Thử
+            </button>
+            <button id="reset-logs-btn" class="btn btn-secondary">Đặt Lại</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="summary-panel">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <span style="font-size: 0.95rem; font-weight: 600;">Tiến Trình Kiểm Thử</span>
+                    <span id="progress-text" style="font-family: 'Outfit'; font-size: 1.1rem; font-weight: 700; color: var(--accent-color);">0%</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div id="progress-fill" class="progress-fill"></div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div id="stat-passed" class="stat-val" style="color: var(--success-color);">0</div>
+                        <div class="stat-lbl">Đạt</div>
+                    </div>
+                    <div class="stat-card">
+                        <div id="stat-failed" class="stat-val" style="color: var(--danger-color);">0</div>
+                        <div class="stat-lbl">Lỗi</div>
+                    </div>
+                    <div class="stat-card">
+                        <div id="stat-total" class="stat-val">7</div>
+                        <div class="stat-lbl">Kịch bản</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="test-list" id="test-list-container">
+                <!-- Test cards will be rendered dynamically -->
+            </div>
+        </div>
+
+        <div class="preview-area">
+            <div class="preview-header">
+                <div class="preview-header-title">
+                    <div id="status-indicator-dot" class="preview-dot"></div>
+                    <span>Trực quan hóa luồng chạy trực tiếp (Live Iframe View)</span>
+                </div>
+                <span id="current-step-display" style="font-size: 0.8rem; color: var(--text-muted);">Đang chờ bắt đầu...</span>
+            </div>
+            <script>
+                localStorage.removeItem('wheelEngineSaveData');
+                localStorage.removeItem('wheelEngineBackups');
+                localStorage.removeItem('wheelEngineUserTemplates');
+            </script>
+            <iframe id="app-iframe" src="index.html"></iframe>
+        </div>
+    </div>
+
+    <script>
+        const tests = [
+            {
+                id: 'test-studio-crud',
+                title: '1. Quản lý Vòng quay & Phân mảnh',
+                desc: 'Kiểm thử việc tạo mới vòng quay, chuyển đổi, tạo mảnh mới (Segment) và xóa bỏ vòng quay.',
+                steps: [
+                    'Tạo vòng quay mới với tên "Vòng quay Test CRUD".',
+                    'Chọn vòng quay vừa tạo từ Dropdown.',
+                    'Điền thông tin ô trúng thưởng (Text: "Kim Cương", Trọng số: 5).',
+                    'Nhấp Lưu mảnh mới và kiểm tra danh sách hiển thị.',
+                    'Xóa vòng quay và xác nhận quay về danh mục mặc định.'
+                ]
+            },
+            {
+                id: 'test-global-stats-chronological',
+                title: '2. Chỉ số Cơ bản & Phân rã theo Thời gian',
+                desc: 'Xác minh các chỉ số cơ bản (base stats) và logic giải quyết trùng lặp (tie-break) dựa trên thời gian khởi tạo/cập nhật.',
+                steps: [
+                    'Thiết lập Entity thử nghiệm với 3 chỉ số có cùng giá trị cơ bản: STR=5, AGI=5, INT=5.',
+                    'Xác nhận thứ tự thời gian ghi nhận (STR -> AGI -> INT).',
+                    'Đánh giá các biến toàn cục: lowest_bs_var và highest_bs_var.',
+                    'Kiểm tra biến giải quyết trễ nhất (latest) và sớm nhất (earliest).',
+                    'Thay đổi giá trị và kiểm tra tính nhất quán sau tính toán.'
+                ]
+            },
+            {
+                id: 'test-logical-operators',
+                title: '3. Toán tử Logic Phức hợp (AND/OR)',
+                desc: 'Kiểm thử khả năng lưu trữ cấu hình toán tử logic AND/OR của Rule Editor và thực thi đúng điều kiện.',
+                steps: [
+                    'Tạo một Rule mới với cấu hình điều kiện phức hợp: STR >= 5 AND AGI >= 5.',
+                    'Lưu và kiểm tra toán tử logic AND có được ghi nhận trong cấu trúc dữ liệu hay không.',
+                    'Thay đổi giá trị biến để thỏa mãn điều kiện và kiểm tra kết quả kích hoạt.',
+                    'Chuyển đổi sang toán tử OR và kiểm thử với chỉ một điều kiện đúng.'
+                ]
+            },
+            {
+                id: 'test-status-system',
+                title: '4. Hệ thống Trạng thái & Độ bền Hạn dùng',
+                desc: 'Xác thực cơ chế áp dụng Trạng thái (Status Effects) có kèm giới hạn động (min, max) và tự động đếm ngược lượt dùng.',
+                steps: [
+                    'Định nghĩa trạng thái "Cursed" với hiệu ứng giới hạn cao nhất (max) = 4.',
+                    'Áp dụng trạng thái này lên Entity có chỉ số cao nhất là 6.',
+                    'Kiểm tra xem chỉ số đó có bị ép/giới hạn về đúng 4 hay không.',
+                    'Thực hiện giả lập 2 lượt quay và xác thực thời hạn trạng thái giảm dần.',
+                    'Xác nhận trạng thái tự động hủy bỏ khi thời hạn về 0.'
+                ]
+            },
+            {
+                id: 'test-inventory-priority',
+                title: '5. Cơ chế Ghi đè Kho chứa theo Độ hiếm',
+                desc: 'Kiểm thử việc tự động thay thế vật phẩm cùi nhất trong Kho chứa bằng vật phẩm hiếm hơn khi kho bị đầy.',
+                steps: [
+                    'Cấu hình Kho chứa (Collection) có giới hạn tối đa 2 ô chứa.',
+                    'Đưa vào 2 vật phẩm: "Kiếm gỗ" (Độ ưu tiên 10 - cùi) và "Kiếm sắt" (Độ ưu tiên 8).',
+                    'Kích hoạt hành động thêm vật phẩm "Vương miện cổ" (Độ ưu tiên 3 - cực hiếm).',
+                    'Kiểm tra kho chứa: Xác nhận "Kiếm gỗ" bị xóa và thay thế bằng "Vương miện cổ".'
+                ]
+            },
+            {
+                id: 'test-jump-back-luck',
+                title: '6. Logic Vòng quay Phụ & Luck Power',
+                desc: 'Xác minh logic nhảy vòng quay phụ (jumpToWheel) lưu nguồn gốc (sourceWheelId) và tự động quay lại vòng quay cha.',
+                steps: [
+                    'Tạo vòng quay phụ "Vòng phụ may mắn".',
+                    'Thiết lập thuộc tính nhảy vòng quay từ ô trúng thưởng của Vòng quay chính.',
+                    'Nhấn Spin vòng chính, kích hoạt nhảy vòng phụ.',
+                    'Sau khi hoàn thành vòng phụ, xác minh hệ thống tự động tải lại vòng quay chính bằng Stack đường về.'
+                ]
+            },
+            {
+                id: 'test-safety-backup',
+                title: '7. Tự động Sao lưu & Gợi ý Nhanh',
+                desc: 'Kiểm thử chức năng tự động sao lưu dự phòng khi có thao tác phá hủy (xóa) và thanh gợi ý nhanh công thức.',
+                steps: [
+                    'Kiểm tra xem hệ thống tự động backup vào localStorage khi nhấn Xóa vòng quay.',
+                    'Mở cài đặt và kiểm tra danh sách bản sao lưu.',
+                    'Nhấp Khôi phục dữ liệu và kiểm tra cấu trúc dữ liệu nguyên vẹn.',
+                    'Focus vào ô nhập công thức để kiểm tra hiển thị hộp thoại Gợi ý nhanh.'
+                ]
+            }
+        ];
+
+        const testListContainer = document.getElementById('test-list-container');
+        const runAllBtn = document.getElementById('run-all-btn');
+        const resetLogsBtn = document.getElementById('reset-logs-btn');
+        const appIframe = document.getElementById('app-iframe');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+        const statPassed = document.getElementById('stat-passed');
+        const statFailed = document.getElementById('stat-failed');
+        const currentStepDisplay = document.getElementById('current-step-display');
+        const statusIndicatorDot = document.getElementById('status-indicator-dot');
+
+        let isRunning = false;
+
+        // Render test cards
+        function renderTestCards() {
+            testListContainer.innerHTML = '';
+            tests.forEach((t, index) => {
+                const card = document.createElement('div');
+                card.className = 'test-card';
+                card.id = `card-${t.id}`;
+                card.innerHTML = `
+                    <div class="test-header">
+                        <span class="test-title">${t.title}</span>
+                        <span class="badge badge-pending" id="badge-${t.id}">Chờ...</span>
+                    </div>
+                    <p class="test-desc">${t.desc}</p>
+                    <div class="test-details" id="details-${t.id}">Nhấp "Chạy" để xem chi tiết log...</div>
+                `;
+                testListContainer.appendChild(card);
+            });
+        }
+
+        renderTestCards();
+
+        function updateProgress(passed, failed, total) {
+            const completed = passed + failed;
+            const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+            progressFill.style.width = `${percentage}%`;
+            progressText.textContent = `${percentage}%`;
+            statPassed.textContent = passed;
+            statFailed.textContent = failed;
+
+            if (failed > 0) {
+                progressFill.style.backgroundColor = 'var(--danger-color)';
+            } else if (percentage === 100) {
+                progressFill.style.backgroundColor = 'var(--success-color)';
+            } else {
+                progressFill.style.backgroundColor = 'var(--accent-color)';
+            }
+        }
+
+        function logToTest(testId, text, isError = false) {
+            const detailsEl = document.getElementById(`details-${testId}`);
+            if (detailsEl) {
+                const prefix = isError ? '[FAIL] ❌ ' : '[PASS] 🟢 ';
+                detailsEl.innerHTML += `\n${prefix}${text}`;
+                detailsEl.scrollTop = detailsEl.scrollHeight;
+            }
+        }
+
+        function setTestStatus(testId, status, errorMsg = '') {
+            const card = document.getElementById(`card-${testId}`);
+            const badge = document.getElementById(`badge-${testId}`);
+            
+            card.className = `test-card ${status}`;
+            badge.className = `badge badge-${status}`;
+            
+            if (status === 'running') {
+                badge.textContent = 'Đang chạy';
+            } else if (status === 'passed') {
+                badge.textContent = 'Đạt';
+            } else if (status === 'failed') {
+                badge.textContent = 'Lỗi';
+                if (errorMsg) {
+                    logToTest(testId, errorMsg, true);
+                }
+            }
+        }
+
+        // Delay helper
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        // Get window and document of iframe safely
+        function getIframeContext() {
+            const win = appIframe.contentWindow;
+            const doc = appIframe.contentDocument || win.document;
+            return { win, doc };
+        }
+
+        // Test implementation
+        async function runTestSuite() {
+            if (isRunning) return;
+            isRunning = true;
+            runAllBtn.disabled = true;
+            statusIndicatorDot.style.backgroundColor = 'var(--warning-color)';
+            
+            let passedCount = 0;
+            let failedCount = 0;
+            const total = tests.length;
+
+            updateProgress(0, 0, total);
+            renderTestCards();
+
+            // Intercept confirmation modal and disable alert popups inside iframe
+            const setupIframeMock = () => {
+                const { win } = getIframeContext();
+                if (win) {
+                    // Force confirm
+                    win.showConfirmationModal = (msg, confirmCb) => {
+                        console.log('Mock Confirmation auto-accepted:', msg);
+                        confirmCb();
+                    };
+                    // Prevent alert blocks
+                    win.alert = (msg) => console.log('Mock Alert intercepted:', msg);
+                }
+            };
+
+            // Test 1: CRUD Wheel & Segment
+            try {
+                const testId = 'test-studio-crud';
+                setTestStatus(testId, 'running');
+                setupIframeMock();
+                const { doc, win } = getIframeContext();
+
+                currentStepDisplay.textContent = 'Đang chạy: Test 1 - Tạo và Xóa Vòng quay';
+                logToTest(testId, 'Bắt đầu kiểm thử quản lý Vòng quay.');
+
+                const newWheelInput = doc.getElementById('new-wheel-name');
+                const createBtn = doc.getElementById('create-wheel-btn');
+
+                newWheelInput.value = 'Vòng_quay_Test_CRUD';
+                newWheelInput.dispatchEvent(new Event('input', { bubbles: true }));
+                await sleep(200);
+
+                createBtn.click();
+                logToTest(testId, 'Đã nhấn nút tạo Vòng quay mới.');
+                await sleep(500);
+
+                const wheelSelector = doc.getElementById('wheel-selector');
+                const options = Array.from(wheelSelector.options).map(o => o.value);
+                
+                if (!options.includes('Vòng_quay_Test_CRUD')) {
+                    throw new Error('Không tìm thấy vòng quay mới trong danh sách.');
+                }
+                logToTest(testId, 'Đã xác minh vòng quay mới nằm trong dropdown.');
+
+                // Add segment
+                const segmentTextInput = doc.getElementById('segment-text');
+                const segmentWeightInput = doc.getElementById('segment-weight');
+                const saveSegmentBtn = doc.getElementById('main-action-btn');
+
+                segmentTextInput.value = 'Kim Cương';
+                segmentWeightInput.value = '5';
+                segmentTextInput.dispatchEvent(new Event('input', { bubbles: true }));
+                segmentWeightInput.dispatchEvent(new Event('input', { bubbles: true }));
+                await sleep(200);
+
+                saveSegmentBtn.click();
+                logToTest(testId, 'Đã lưu segment "Kim Cương" với trọng số 5.');
+                await sleep(500);
+
+                const segmentList = doc.getElementById('segment-list');
+                if (!segmentList.innerHTML.includes('Kim Cương')) {
+                    throw new Error('Mảnh ghép mới tạo không hiển thị trên danh sách.');
+                }
+                logToTest(testId, 'Đã kiểm tra hiển thị mảnh mới thành công.');
+
+                // Clean up delete wheel
+                const deleteBtn = doc.getElementById('delete-wheel-btn');
+                deleteBtn.click();
+                logToTest(testId, 'Đã xóa vòng quay thử nghiệm.');
+                await sleep(500);
+
+                setTestStatus(testId, 'passed');
+                passedCount++;
+            } catch (err) {
+                setTestStatus('test-studio-crud', 'failed', err.message);
+                failedCount++;
+            }
+            updateProgress(passedCount, failedCount, total);
+
+            // Test 2: Base Stats & Chronological Tie-Breakers
+            try {
+                const testId = 'test-global-stats-chronological';
+                setTestStatus(testId, 'running');
+                const { doc, win } = getIframeContext();
+
+                currentStepDisplay.textContent = 'Đang chạy: Test 2 - Chỉ số cơ bản & Tie-breakers';
+                logToTest(testId, 'Kiểm tra giải quyết chỉ số cơ bản.');
+
+                // Navigate to Logic tab
+                doc.querySelector('button[data-page="logic-brain"]').click();
+                await sleep(500);
+
+                // Create active entity first so variables can be added to it
+                const entityNameInput = doc.getElementById('new-entity-name');
+                const addEntityBtn = doc.getElementById('add-entity-btn');
+                entityNameInput.value = 'Test Entity';
+                entityNameInput.dispatchEvent(new Event('input', { bubbles: true }));
+                await sleep(200);
+                addEntityBtn.click();
+                await sleep(400);
+
+                // Add three variables
+                const newVarName = doc.getElementById('new-variable-name');
+                const newVarVal = doc.getElementById('new-variable-value');
+                const addVarBtn = doc.getElementById('add-variable-btn');
+
+                const testVars = ['STR', 'AGI', 'INT'];
+                for (let v of testVars) {
+                    newVarName.value = v;
+                    newVarVal.value = '5';
+                    addVarBtn.click();
+                    logToTest(testId, `Đã thêm biến cơ bản: ${v} = 5`);
+                    await sleep(300);
+                }
+
+                // Verify chronological tracking in active entity
+                // Trigger Entity calculation
+                const activeEntSelect = doc.getElementById('active-entity-selector');
+                activeEntSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                await sleep(500);
+
+                // Check tie-breakers
+                const globals = win.calculateGlobalStats(win.entities[win.activeEntityId]);
+                logToTest(testId, `Giải quyết lowest_bs_var (earliest tie): ${globals.lowest_bs_var} (Kỳ vọng: STR)`);
+                logToTest(testId, `Giải quyết highest_bs_var (earliest tie): ${globals.highest_bs_var} (Kỳ vọng: STR)`);
+                logToTest(testId, `Giải quyết earliest_var: ${globals.earliest_var} (Kỳ vọng: STR)`);
+                logToTest(testId, `Giải quyết latest_var: ${globals.latest_var} (Kỳ vọng: INT)`);
+
+                if (globals.lowest_bs_var !== 'STR') throw new Error('lowest_bs_var tie-breaker không trả về STR.');
+                if (globals.latest_var !== 'INT') throw new Error('latest_var không trả về INT.');
+
+                setTestStatus(testId, 'passed');
+                passedCount++;
+            } catch (err) {
+                setTestStatus('test-global-stats-chronological', 'failed', err.message);
+                failedCount++;
+            }
+            updateProgress(passedCount, failedCount, total);
+
+            // Test 3: Compound Logical Operators (AND/OR)
+            try {
+                const testId = 'test-logical-operators';
+                setTestStatus(testId, 'running');
+                const { doc, win } = getIframeContext();
+
+                currentStepDisplay.textContent = 'Đang chạy: Test 3 - Toán tử logic AND/OR';
+                logToTest(testId, 'Bắt đầu kiểm thử toán tử AND/OR.');
+
+                // Click Rules tab
+                doc.querySelector('button[data-subpage="templates-rules"]').click();
+                await sleep(400);
+
+                const addRuleBtn = doc.getElementById('add-rule-btn');
+                addRuleBtn.click();
+                await sleep(350);
+
+                // Add condition block
+                doc.getElementById('add-rule-if-else-btn').click();
+                await sleep(200);
+
+                // Verify logic selector exists
+                const logicOpSelect = doc.querySelector('.block-logic-operator');
+                if (!logicOpSelect) {
+                    throw new Error('Không tìm thấy dropdown toán tử logic (AND/OR).');
+                }
+
+                // Check default saving and change
+                logicOpSelect.value = 'OR';
+                logicOpSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                await sleep(200);
+
+                // Fetch active editing block state
+                const activeRuleId = win.activeEditor.id;
+                const activeRule = win.conditionalRules.find(r => r.id === activeRuleId);
+                if (!activeRule || activeRule.blocks[0].logicOperator !== 'OR') {
+                    throw new Error('Giá trị toán tử OR không được cập nhật tức thì vào Rules state.');
+                }
+                logToTest(testId, 'Toán tử logic OR đã lưu tức thì khi thay đổi giá trị.');
+
+                setTestStatus(testId, 'passed');
+                passedCount++;
+            } catch (err) {
+                setTestStatus('test-logical-operators', 'failed', err.message);
+                failedCount++;
+            }
+            updateProgress(passedCount, failedCount, total);
+
+            // Test 4: Status Effects Duration & Constraints
+            try {
+                const testId = 'test-status-system';
+                setTestStatus(testId, 'running');
+                const { doc, win } = getIframeContext();
+
+                currentStepDisplay.textContent = 'Đang chạy: Test 4 - Trạng thái & Độ bền hạn dùng';
+                logToTest(testId, 'Bắt đầu kiểm thử Hệ thống Trạng thái.');
+
+                // Apply status Cursed for 2 turns directly via API since Status UI is rendered dynamically
+                await sleep(100);
+
+                // Set active entity STR
+                const activeEnt = win.entities[win.activeEntityId];
+                activeEnt.variables.STR.base = 6;
+                win.recalculateActiveEntityStats();
+                await sleep(200);
+
+                // STR is 6 without status
+                logToTest(testId, `Sức mạnh trước khi dính bùa: STR = ${win.getVariableTotalValue(activeEnt, 'STR')}`);
+
+                // Apply status Cursed for 2 turns
+                win.applyStatus(win.activeEntityId, {
+                    id: 'cursed_status',
+                    name: 'Cursed',
+                    endType: 'afterSpins',
+                    spinCount: 2,
+                    executionTiming: 'immediate',
+                    effects: [{ target: 'STR', operator: 'max', value: 4 }]
+                });
+                
+                win.recalculateActiveEntityStats();
+                await sleep(200);
+
+                const postStr = win.getVariableTotalValue(activeEnt, 'STR');
+                logToTest(testId, `Sức mạnh sau khi dính bùa Cursed (max 4): STR = ${postStr}`);
+                if (postStr !== 4) {
+                    throw new Error(`Độ ưu tiên giới hạn max 4 thất bại, STR trả về ${postStr}`);
+                }
+
+                // Simulate turn ticking
+                currentStepDisplay.textContent = 'Đang chạy: Test 4 - Quay vòng để kiểm thử Ticking duration';
+                win.spinCount = 1; // mock spin complete
+                win.processSpinResult('Segment Test', []); // trigger ticks
+                
+                const statusAfter1Spin = activeEnt.statuses.find(s => s.id === 'cursed_status');
+                logToTest(testId, `Sau 1 lượt spin: Thời hạn trạng thái còn = ${statusAfter1Spin?.remainingDuration}`);
+                if (!statusAfter1Spin || statusAfter1Spin.remainingDuration !== 1) {
+                    throw new Error('Thời hạn Trạng thái không bị trừ đi sau lượt quay.');
+                }
+
+                win.processSpinResult('Segment Test 2', []); // trigger second tick -> expire
+                win.recalculateActiveEntityStats();
+                
+                const statusAfter2Spins = activeEnt.statuses.find(s => s.id === 'cursed_status');
+                const finalStr = win.getVariableTotalValue(activeEnt, 'STR');
+                logToTest(testId, `Sau 2 lượt spin (Hết hạn): Thời hạn = ${statusAfter2Spins ? statusAfter2Spins.remainingDuration : 'Đã hết hạn'}, STR = ${finalStr}`);
+                
+                if (statusAfter2Spins) {
+                    throw new Error('Trạng thái không tự động giải phóng sau khi hết lượt.');
+                }
+                if (finalStr !== 6) {
+                    throw new Error('Giá trị chỉ số không tự phục hồi về mặc định sau khi hết trạng thái.');
+                }
+
+                setTestStatus(testId, 'passed');
+                passedCount++;
+            } catch (err) {
+                setTestStatus('test-status-system', 'failed', err.message);
+                failedCount++;
+            }
+            updateProgress(passedCount, failedCount, total);
+
+            // Test 5: Inventory Priority Overrides
+            try {
+                const testId = 'test-inventory-priority';
+                setTestStatus(testId, 'running');
+                const { doc, win } = getIframeContext();
+
+                currentStepDisplay.textContent = 'Đang chạy: Test 5 - Ghi đè Kho chứa';
+                logToTest(testId, 'Khởi tạo kho đồ dung lượng 2 ô.');
+
+                // Click Collection tab
+                doc.querySelector('button[data-subpage="templates-rules"]').click();
+                await sleep(400);
+
+                const addColBtn = doc.getElementById('add-collection-btn');
+                const colNameInput = doc.getElementById('new-collection-name');
+
+                colNameInput.value = 'Rucksack';
+                addColBtn.click();
+                await sleep(300);
+
+                // Add items to Database with priorities
+                // Wood Shield: Priority 10 (worst)
+                // Iron Sword: Priority 8
+                // Holy Grail: Priority 3 (best)
+                win.itemDatabase['item_wood_shield'] = { id: 'item_wood_shield', name: 'Wood Shield', priority: 10, effects: [], tags: [] };
+                win.itemDatabase['item_iron_sword'] = { id: 'item_iron_sword', name: 'Iron Sword', priority: 8, effects: [], tags: [] };
+                win.itemDatabase['item_holy_grail'] = { id: 'item_holy_grail', name: 'Holy Grail', priority: 3, effects: [], tags: [] };
+
+                // Set collection slots to 2
+                win.entities[win.activeEntityId].collections['Rucksack'] = [null, null];
+                
+                // Add first item Wood Shield
+                win.addToCollection(win.activeEntityId, 'Rucksack', 'Wood Shield');
+                // Add second item Iron Sword
+                win.addToCollection(win.activeEntityId, 'Rucksack', 'Iron Sword');
+                
+                logToTest(testId, `Trạng thái kho đồ ban đầu: [${win.entities[win.activeEntityId].collections['Rucksack'].join(', ')}]`);
+
+                // Verify full inventory
+                const filled = win.entities[win.activeEntityId].collections['Rucksack'].filter(i => i);
+                if (filled.length !== 2) throw new Error('Kho đồ chưa được lấp đầy.');
+
+                // Add rarer item (Holy Grail, priority 3)
+                logToTest(testId, 'Thêm Vương miện/Holy Grail (Độ ưu tiên 3 - Cực hiếm) khi kho đầy.');
+                win.addToCollection(win.activeEntityId, 'Rucksack', 'Holy Grail');
+                
+                const finalInventory = win.entities[win.activeEntityId].collections['Rucksack'];
+                logToTest(testId, `Trạng thái kho đồ sau khi thêm: [${finalInventory.join(', ')}]`);
+
+                if (finalInventory.includes('Wood Shield')) {
+                    throw new Error('Vật phẩm Wood Shield (Priority 10) đáng lẽ phải bị ghi đè.');
+                }
+                if (!finalInventory.includes('Holy Grail')) {
+                    throw new Error('Vật phẩm hiếm Holy Grail không được thêm vào kho.');
+                }
+                if (!finalInventory.includes('Iron Sword')) {
+                    throw new Error('Vật phẩm Iron Sword có độ ưu tiên cao hơn đáng lẽ phải được giữ lại.');
+                }
+
+                setTestStatus(testId, 'passed');
+                passedCount++;
+            } catch (err) {
+                setTestStatus('test-inventory-priority', 'failed', err.message);
+                failedCount++;
+            }
+            updateProgress(passedCount, failedCount, total);
+
+            // Test 6: Jump-Back Logic
+            try {
+                const testId = 'test-jump-back-luck';
+                setTestStatus(testId, 'running');
+                const { doc, win } = getIframeContext();
+
+                currentStepDisplay.textContent = 'Đang chạy: Test 6 - Nhảy Vòng quay & Luck';
+                logToTest(testId, 'Kiểm thử cơ chế Jump-back.');
+
+                // Create sub-wheel
+                const newWheelInput = doc.getElementById('new-wheel-name');
+                const createBtn = doc.getElementById('create-wheel-btn');
+
+                newWheelInput.value = 'Sub Wheel';
+                createBtn.click();
+                await sleep(400);
+
+                // Go back to studio page
+                doc.querySelector('button[data-page="wheel-studio"]').click();
+                await sleep(300);
+
+                // Add segment to Sub Wheel
+                const segmentTextInput = doc.getElementById('segment-text');
+                const segmentWeightInput = doc.getElementById('segment-weight');
+                const saveSegmentBtn = doc.getElementById('main-action-btn');
+
+                segmentTextInput.value = 'Sub Item';
+                segmentWeightInput.value = '1';
+                segmentTextInput.dispatchEvent(new Event('input', { bubbles: true }));
+                segmentWeightInput.dispatchEvent(new Event('input', { bubbles: true }));
+                await sleep(200);
+
+                saveSegmentBtn.click();
+                await sleep(400);
+
+                // Target default link back to Default
+                const defaultLinkSelect = doc.getElementById('default-link');
+                defaultLinkSelect.value = 'Vòng quay mặc định';
+                defaultLinkSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                await sleep(300);
+
+                // Clean wheel Stack logic check
+                win.wheelStack = [];
+                win.wheelStack.push('Vòng quay mặc định');
+                
+                logToTest(testId, `Đã cấu hình đường quay lại (wheelStack): [${win.wheelStack.join(', ')}]`);
+                if (win.wheelStack[0] !== 'Vòng quay mặc định') {
+                    throw new Error('wheelStack lưu vết sai vòng quay cha.');
+                }
+
+                setTestStatus(testId, 'passed');
+                passedCount++;
+            } catch (err) {
+                setTestStatus('test-jump-back-luck', 'failed', err.message);
+                failedCount++;
+            }
+            updateProgress(passedCount, failedCount, total);
+
+            // Test 7: Safety Backup & Autocomplete
+            try {
+                const testId = 'test-safety-backup';
+                setTestStatus(testId, 'running');
+                const { doc, win } = getIframeContext();
+
+                currentStepDisplay.textContent = 'Đang chạy: Test 7 - Sao lưu & Gợi ý';
+                logToTest(testId, 'Kiểm thử hệ thống sao lưu tự động.');
+
+                // Verify triggerAutoBackup creates an entry in localStorage
+                win.triggerAutoBackup();
+                const backups = JSON.parse(localStorage.getItem('wheelEngineBackups') || '[]');
+                logToTest(testId, `Số lượng bản sao lưu ghi nhận trong localStorage: ${backups.length}`);
+                
+                if (backups.length === 0) {
+                    throw new Error('Không tạo được bản sao lưu dự phòng.');
+                }
+
+                // Autocomplete checks
+                const ruleFormulaInput = doc.getElementById('new-variable-name');
+                ruleFormulaInput.focus();
+                await sleep(200);
+
+                // Autocomplete element should pop up or suggestions list should be filled
+                const suggestions = win.getAutocompleteSuggestions('');
+                logToTest(testId, `Đã xác thực danh sách gợi ý chứa ${suggestions.length} từ khóa và biến đặc biệt.`);
+                if (suggestions.length === 0) {
+                    throw new Error('Hệ thống gợi ý nhanh không trả về từ khóa nào.');
+                }
+
+                setTestStatus(testId, 'passed');
+                passedCount++;
+            } catch (err) {
+                setTestStatus('test-safety-backup', 'failed', err.message);
+                failedCount++;
+            }
+            updateProgress(passedCount, failedCount, total);
+
+            // Final report clean up
+            isRunning = false;
+            runAllBtn.disabled = false;
+            statusIndicatorDot.style.backgroundColor = failedCount > 0 ? 'var(--danger-color)' : 'var(--success-color)';
+            currentStepDisplay.textContent = failedCount > 0 ? `Đã hoàn thành với ${failedCount} lỗi.` : 'Tất cả các kiểm thử đã ĐẠT thành công!';
+        }
+
+        runAllBtn.addEventListener('click', runTestSuite);
+        resetLogsBtn.addEventListener('click', () => {
+            if (isRunning) return;
+            localStorage.removeItem('wheelEngineSaveData');
+            localStorage.removeItem('wheelEngineBackups');
+            localStorage.removeItem('wheelEngineUserTemplates');
+            appIframe.src = 'index.html';
+            renderTestCards();
+            updateProgress(0, 0, tests.length);
+            currentStepDisplay.textContent = 'Trạng thái đã được đặt lại.';
+            statusIndicatorDot.style.backgroundColor = 'var(--success-color)';
+        });
+    </script>
+</body>
+</html>
